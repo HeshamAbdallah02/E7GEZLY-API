@@ -1,0 +1,318 @@
+﻿// Controllers/Auth/VenueAuthController.cs
+using E7GEZLY_API.Data;
+using E7GEZLY_API.DTOs.Auth;
+using E7GEZLY_API.DTOs.Location;
+using E7GEZLY_API.Extensions;
+using E7GEZLY_API.Models;
+using E7GEZLY_API.Services.Auth;
+using E7GEZLY_API.Services.Location;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+
+namespace E7GEZLY_API.Controllers.Auth
+{
+    [ApiController]
+    [Route("api/auth/venue")]
+    public class VenueAuthController : BaseAuthController
+    {
+        public VenueAuthController(
+            UserManager<ApplicationUser> userManager,
+            SignInManager<ApplicationUser> signInManager,
+            ITokenService tokenService,
+            IVerificationService verificationService,
+            ILocationService locationService,
+            IGeocodingService geocodingService,
+            AppDbContext context,
+            ILogger<VenueAuthController> logger,
+            IWebHostEnvironment environment)
+            : base(userManager, signInManager, tokenService, verificationService, locationService, geocodingService, context, logger, environment)
+        {
+        }
+
+        [HttpPost("register")]
+        public async Task<IActionResult> RegisterVenue(RegisterVenueDto dto)
+        {
+            var transaction = await _context.Database.BeginTransactionAsync();
+
+            try
+            {
+                if (!ModelState.IsValid)
+                {
+                    return BadRequest(ModelState);
+                }
+
+                // Check if email already exists
+                var existingUser = await _userManager.FindByEmailAsync(dto.Email);
+                if (existingUser != null)
+                {
+                    return BadRequest(new { message = "Email already registered" });
+                }
+
+                // Check if phone number already exists
+                var formattedPhoneNumber = $"+2{dto.PhoneNumber}";
+                var existingPhone = await _userManager.Users
+                    .FirstOrDefaultAsync(u => u.PhoneNumber == formattedPhoneNumber);
+                if (existingPhone != null)
+                {
+                    return BadRequest(new { message = "Phone number already registered" });
+                }
+
+                // Create venue with basic info only (no location yet)
+                var venue = new Venue
+                {
+                    Id = Guid.NewGuid(),
+                    Name = dto.VenueName,
+                    VenueType = dto.VenueType,
+                    Features = DetermineVenueFeatures(dto.VenueType),
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
+                };
+
+                _context.Venues.Add(venue);
+
+                // Create user
+                var user = new ApplicationUser
+                {
+                    UserName = dto.Email,
+                    Email = dto.Email,
+                    PhoneNumber = formattedPhoneNumber,
+                    VenueId = venue.Id,
+                    CreatedAt = DateTime.UtcNow,
+                    IsActive = true,
+                    IsPhoneNumberVerified = false,
+                    IsEmailVerified = false
+                };
+
+                var result = await _userManager.CreateAsync(user, dto.Password);
+                if (!result.Succeeded)
+                {
+                    await transaction.RollbackAsync();
+                    return BadRequest(new { errors = result.Errors });
+                }
+
+                // Assign role
+                try
+                {
+                    await _userManager.AddToRoleAsync(user, DbInitializer.AppRoles.VenueAdmin);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Error assigning role to venue user");
+                    await transaction.RollbackAsync();
+                    return StatusCode(500, new { message = "Error assigning user role", detail = ex.Message });
+                }
+
+                // Save to generate IDs
+                await _context.SaveChangesAsync();
+
+                // Generate and send phone verification code
+                string? verificationCode = null;
+                try
+                {
+                    var (success, code) = await _verificationService.GenerateVerificationCodeAsync();
+                    if (success)
+                    {
+                        user.PhoneNumberVerificationCode = code;
+                        user.PhoneNumberVerificationCodeExpiry = DateTime.UtcNow.AddMinutes(10);
+                        await _userManager.UpdateAsync(user);
+
+                        await _verificationService.SendPhoneVerificationAsync(dto.PhoneNumber, code);
+                        verificationCode = code;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Error generating/sending verification code");
+                }
+
+                await transaction.CommitAsync();
+
+                // Send welcome email
+                if (!string.IsNullOrEmpty(user.Email))
+                {
+                    try
+                    {
+                        await _verificationService.SendWelcomeEmailAsync(
+                            user.Email,
+                            venue.Name,
+                            "Venue"
+                        );
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Failed to send welcome email, but registration succeeded");
+                        // Don't fail registration if email fails
+                    }
+                }
+
+                _logger.LogInformation($"New venue registered: {venue.Name} ({dto.VenueType})");
+
+                // Return response
+                if (_environment.IsDevelopment())
+                {
+                    return Ok(new
+                    {
+                        success = true,
+                        message = "Registration successful. Please verify your phone number.",
+                        userId = user.Id,
+                        venueId = venue.Id,
+                        requiresVerification = true,
+                        requiresProfileCompletion = true,
+                        verificationCode = verificationCode // For testing only
+                    });
+                }
+                else
+                {
+                    return Ok(new
+                    {
+                        success = true,
+                        message = "Registration successful. Please verify your phone number.",
+                        userId = user.Id,
+                        venueId = venue.Id,
+                        requiresVerification = true,
+                        requiresProfileCompletion = true
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error during venue registration");
+                await transaction.RollbackAsync();
+
+                if (_environment.IsDevelopment())
+                {
+                    return StatusCode(500, new
+                    {
+                        message = "An error occurred during registration",
+                        detail = ex.Message,
+                        stackTrace = ex.StackTrace,
+                        innerException = ex.InnerException?.Message
+                    });
+                }
+
+                return StatusCode(500, new { message = "An error occurred during registration" });
+            }
+        }
+
+
+        [HttpPost("login")]
+        public async Task<IActionResult> VenueLogin(LoginDto dto)
+        {
+            try
+            {
+                var user = await _userManager.FindByEmailAsync(dto.Email);
+                if (user == null || user.VenueId == null)
+                {
+                    return Unauthorized(new { message = "Invalid credentials" });
+                }
+
+                var result = await _signInManager.CheckPasswordSignInAsync(user, dto.Password, false);
+                if (!result.Succeeded)
+                {
+                    return Unauthorized(new { message = "Invalid credentials" });
+                }
+
+                if (!user.IsActive)
+                {
+                    return Unauthorized(new { message = "Account is deactivated" });
+                }
+
+                // Check if user is verified (phone or email)
+                if (!user.IsPhoneNumberVerified && !user.IsEmailVerified)
+                {
+                    return Unauthorized(new
+                    {
+                        message = "Account not verified",
+                        userId = user.Id,
+                        requiresVerification = true
+                    });
+                }
+
+                var venue = await _context.Venues
+                    .Include(v => v.District)
+                    .ThenInclude(d => d!.Governorate)
+                    .FirstOrDefaultAsync(v => v.Id == user.VenueId);
+
+                if (venue == null)
+                {
+                    return Unauthorized(new { message = "Venue not found" });
+                }
+
+                _logger.LogInformation($"Venue logged in: {venue.Name}");
+
+                // Create session info using extension methods
+                var sessionInfo = new CreateSessionDto(
+                    DeviceName: HttpContext.GetDeviceName(),
+                    DeviceType: HttpContext.DetectDeviceType(),
+                    UserAgent: Request.Headers["User-Agent"].FirstOrDefault(),
+                    IpAddress: HttpContext.GetClientIpAddress()
+                );
+
+                var tokens = await _tokenService.GenerateTokensAsync(user, sessionInfo);
+
+                return Ok(new
+                {
+                    tokens = tokens,
+                    user = new
+                    {
+                        id = user.Id,
+                        email = user.Email,
+                        phoneNumber = user.PhoneNumber,
+                        venueId = venue.Id
+                    },
+                    venue = new
+                    {
+                        id = venue.Id,
+                        name = venue.Name,
+                        type = venue.VenueType.ToString(),
+                        features = venue.Features,
+                        isProfileComplete = venue.IsProfileComplete,
+                        location = venue.IsProfileComplete ? new
+                        {
+                            latitude = venue.Latitude,
+                            longitude = venue.Longitude,
+                            streetAddress = venue.StreetAddress,
+                            district = venue.District?.NameEn,
+                            governorate = venue.District?.Governorate?.NameEn,
+                            fullAddress = venue.FullAddress
+                        } : null
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error during venue login");
+                return StatusCode(500, new { message = "An error occurred during login" });
+            }
+        }
+
+        private VenueFeatures DetermineVenueFeatures(VenueType venueType)
+        {
+            return venueType switch
+            {
+                VenueType.PlayStationVenue => VenueFeatures.DesktopAccess |
+                                            VenueFeatures.OnlineBooking |
+                                            VenueFeatures.HasInventory |
+                                            VenueFeatures.AcceptsCash |
+                                            VenueFeatures.AcceptsCard,
+
+                VenueType.FootballCourt => VenueFeatures.OnlineBooking |
+                                         VenueFeatures.RequiresDeposit |
+                                         VenueFeatures.AcceptsCash,
+
+                VenueType.PadelCourt => VenueFeatures.OnlineBooking |
+                                      VenueFeatures.RequiresDeposit |
+                                      VenueFeatures.AcceptsCash |
+                                      VenueFeatures.AcceptsCard,
+
+                VenueType.BilliardHall => VenueFeatures.OnlineBooking |
+                                        VenueFeatures.HasInventory |
+                                        VenueFeatures.AcceptsCash |
+                                        VenueFeatures.AcceptsCard,
+
+                _ => VenueFeatures.OnlineBooking | VenueFeatures.AcceptsCash
+            };
+        }
+    }
+}

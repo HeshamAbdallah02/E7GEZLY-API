@@ -1,0 +1,148 @@
+﻿E7GEZLY API/
+├── E7GEZLY API
+│   ├── Controllers
+│   │   ├── Auth
+│   │   │   ├── AccountController.cs
+│   │   │   ├── BaseAuthController.cs
+│   │   │   ├── CustomerAuthController.cs
+│   │   │   ├── PasswordResetController.cs
+│   │   │   ├── SocialAuthController.cs
+│   │   │   ├── TokenController.cs
+│   │   │   ├── VenueAuthController.cs
+│   │   │   └── VerificationController.cs
+│   │   ├── LocationController.cs
+│   │   └── TestController.cs
+│   ├── Data
+│   │   ├── AppDbContext.cs
+│   │   ├── DbInitializer.cs
+│   │   └── LocationSeeder.cs
+│   ├── DTOs
+│   │   ├── Auth
+│   │   │   ├── AccountManagementDtos.cs
+│   │   │   ├── AuthResponseDto.cs
+│   │   │   ├── LoginDto.cs
+│   │   │   ├── PasswordResetDto.cs
+│   │   │   ├── RefreshTokenDto.cs
+│   │   │   ├── RegisterCustomerDto.cs
+│   │   │   ├── RegisterVenueDto.cs
+│   │   │   ├── SessionDtos.cs
+│   │   │   ├── SocialAuthDtos.cs
+│   │   │   └── VerificationDtos.cs
+│   │   ├── Common
+│   │   │   └── ApiResponseDtos.cs
+│   │   ├── Customer
+│   │   │   └── CustomerProfileDtos.cs
+│   │   ├── Location
+│   │   │   ├── AddressResponseDto.cs
+│   │   │   └── LocationDtos.cs
+│   │   ├── User
+│   │   │   └── UserDtos.cs
+│   │   └── Venue
+│   │       └── VenueProfileDtos.cs
+│   ├── Exceptions
+│   │   └── GeocodingException.cs
+│   ├── Extensions
+│   │   ├── AuthenticationExtensions.cs
+│   │   ├── CorsExtensions.cs
+│   │   ├── HealthChecksExtensions.cs
+│   │   ├── HttpContextExtensions.cs
+│   │   ├── ServiceCollectionExtensions.cs
+│   │   ├── SocialAuthExtensions.cs
+│   │   ├── SwaggerExtensions.cs
+│   │   └── WebApplicationExtensions.cs
+│   ├── HealthChecks
+│   │   └── NominatimHealthCheck.cs
+│   ├── Migrations
+│   │   ├── 20250722134948_InitialCreate.cs
+│   │   ├── 20250722134948_InitialCreate.Designer.cs
+│   │   ├── 20250722145940_AddPasswordResetFields.cs
+│   │   ├── 20250722145940_AddPasswordResetFields.Designer.cs
+│   │   ├── 20250723170828_AddIsProfileCompleteToVenue.cs
+│   │   ├── 20250723170828_AddIsProfileCompleteToVenue.Designer.cs
+│   │   ├── 20250724115036_RemoveRefreshTokenFromUser.cs
+│   │   ├── 20250724115036_RemoveRefreshTokenFromUser.Designer.cs
+│   │   ├── 20250726133303_AddExternalLoginsTable.cs
+│   │   ├── 20250726133303_AddExternalLoginsTable.Designer.cs
+│   │   └── AppDbContextModelSnapshot.cs
+│   ├── Models
+│   │   ├── ApplicationUser.cs
+│   │   ├── BaseSyncEntity.cs
+│   │   ├── CustomerProfile.cs
+│   │   ├── ExternalLogin.cs
+│   │   ├── Location.cs
+│   │   ├── Reservation.cs
+│   │   ├── UserSession.cs
+│   │   └── Venue.cs
+│   ├── Properties
+│   │   └── launchSettings.json
+│   ├── Services
+│   │   ├── Auth
+│   │   │   ├── IProfileService.cs
+│   │   │   ├── ISocialAuthService.cs
+│   │   │   ├── ITokenService.cs
+│   │   │   ├── IVerificationService.cs
+│   │   │   ├── ProfileService.cs
+│   │   │   ├── SocialAuthService.cs
+│   │   │   ├── TokenService.cs
+│   │   │   └── VerificationService.cs
+│   │   ├── BackgroundServices
+│   │   │   └── SessionCleanupService.cs
+│   │   ├── Communication
+│   │   │   ├── IEmailService.cs
+│   │   │   ├── ISmsService.cs
+│   │   │   ├── MockEmailService.cs
+│   │   │   ├── MockSmsService.cs
+│   │   │   └── SendGridEmailService.cs
+│   │   └── Location
+│   │       ├── CachedGeocodingService.cs
+│   │       ├── IGeocodingService.cs
+│   │       ├── ILocationService.cs
+│   │       ├── LocationService.cs
+│   │       └── NominatimGeocodingService.cs
+│   ├── Tests
+│   │   ├── Integration
+│   │   │   └── GeocodingServiceTests.cs
+│   │   └── Unit
+│   │       └── GeocodingServiceUnitTests.cs
+│   ├── appsettings.Development.json
+│   ├── appsettings.json
+│   ├── appsettings.Production.json
+│   ├── E7GEZLY API.csproj
+│   ├── E7GEZLY API.csproj.Backup.tmp
+│   ├── E7GEZLY API.csproj.user
+│   ├── E7GEZLY API.http
+│   ├── Program.cs
+│   └── testsettings.json
+├── E7GEZLY_API.Tests
+│   ├── Categories
+│   │   └── TestCategories.cs
+│   ├── Integration
+│   │   ├── Controllers
+│   │   │   └── VerificationControllerTests.cs
+│   │   └── Services
+│   │       └── TokenServiceIntegrationTests.cs
+│   ├── TestHelpers
+│   │   └── TestDataFactory.cs
+│   ├── TestResults
+│   │   └── Deploy_20109 20250721T183159_23964
+│   │       ├── In
+│   │       │   └── LAPTOP-V8R4T203
+│   │       └── Out
+│   ├── Unit
+│   │   └── Services
+│   │       ├── GeocodingServiceTests.cs
+│   │       ├── LocationServiceTests.cs
+│   │       ├── TokenServiceTests.cs
+│   │       └── VerificationServiceTests.cs
+│   ├── E7GEZLY_API.Tests.csproj
+│   └── testsettings.json
+├── TestResults
+│   └── CoverageReport
+├── copy-test-files.bat
+├── dotnet
+├── E7GEZLY API.sln
+├── project-structure.txt
+├── run-coverage.ps1
+├── run-coverage.sh
+├── run-full-coverage.ps1
+└── run-unit-coverage.ps1

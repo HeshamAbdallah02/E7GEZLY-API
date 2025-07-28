@@ -1,0 +1,14 @@
+// testsettings.json
+{
+  "Logging": {
+    "LogLevel": {
+      "Default": "Debug",
+      "Microsoft": "Warning"
+    }
+  },
+  "Testing": {
+    "UseRealNominatim": false,
+    "MockResponsesPath": "Tests/MockData/",
+    "NominatimTimeout": 5
+  }
+}

@@ -1,0 +1,247 @@
+﻿//Data/AppDbContext.cs
+using E7GEZLY_API.Models;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
+using System.Linq;
+
+namespace E7GEZLY_API.Data
+{
+    public class AppDbContext : IdentityDbContext<ApplicationUser>
+    {
+        public AppDbContext(DbContextOptions<AppDbContext> opts)
+            : base(opts) { }
+
+        public DbSet<UserSession> UserSessions => Set<UserSession>();
+        public DbSet<Venue> Venues => Set<Venue>();
+        public DbSet<Reservation> Reservations => Set<Reservation>();
+        public DbSet<CustomerProfile> CustomerProfiles => Set<CustomerProfile>();
+        public DbSet<Governorate> Governorates { get; set; }
+        public DbSet<District> Districts { get; set; }
+        public DbSet<ExternalLogin> ExternalLogins => Set<ExternalLogin>();
+
+        protected override void OnModelCreating(ModelBuilder builder)
+        {
+            base.OnModelCreating(builder);
+
+            // Keep your existing BaseSyncEntity configuration
+            var syncEntities = builder.Model.GetEntityTypes()
+                .Where(e => typeof(BaseSyncEntity).IsAssignableFrom(e.ClrType) &&
+                            !e.ClrType.IsAbstract);
+
+            foreach (var entityType in syncEntities)
+            {
+                builder.Entity(entityType.ClrType)
+                    .Property(nameof(BaseSyncEntity.CreatedAt))
+                    .HasDefaultValueSql("GETUTCDATE()");
+
+                builder.Entity(entityType.ClrType)
+                    .Property(nameof(BaseSyncEntity.UpdatedAt))
+                    .HasDefaultValueSql("GETUTCDATE()");
+            }
+
+            ConfigureApplicationUser(builder);
+            ConfigureUserSession(builder);
+            ConfigureVenue(builder);
+            ConfigureCustomerProfile(builder);
+            ConfigureGovernorate(builder);
+            ConfigureDistrict(builder);
+            ConfigureExternalLogin(builder);
+        }
+
+        private void ConfigureApplicationUser(ModelBuilder builder)
+        {
+            builder.Entity<ApplicationUser>(entity =>
+            {
+                entity.Property(e => e.CreatedAt)
+                    .HasDefaultValueSql("GETUTCDATE()");
+
+                // Configure phone number if needed
+                entity.Property(e => e.PhoneNumber)
+                    .HasMaxLength(50);
+            });
+        }
+
+        private void ConfigureUserSession(ModelBuilder builder)
+        {
+            builder.Entity<UserSession>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+
+                entity.Property(e => e.RefreshToken)
+                    .IsRequired()
+                    .HasMaxLength(500);
+
+                entity.Property(e => e.LastActivityAt)
+                    .HasDefaultValueSql("GETUTCDATE()");
+
+                entity.HasOne(s => s.User)
+                    .WithMany(u => u.Sessions)
+                    .HasForeignKey(s => s.UserId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasIndex(e => e.RefreshToken)
+                    .IsUnique();
+
+                entity.HasIndex(e => new { e.UserId, e.IsActive });
+            });
+        }
+        private void ConfigureVenue(ModelBuilder builder)
+        {
+            builder.Entity<Venue>(entity =>
+            {
+                // Name configuration
+                entity.Property(e => e.Name)
+                    .HasMaxLength(200)
+                    .IsRequired();
+
+                // Location - not required
+                entity.Property(e => e.Latitude);
+
+                entity.Property(e => e.Longitude);
+
+                entity.Property(e => e.StreetAddress)
+                    .HasMaxLength(500);
+
+                entity.Property(e => e.Landmark)
+                    .HasMaxLength(200);
+
+                // Ignore computed property
+                entity.Ignore(e => e.FullAddress);
+
+                // Relationships
+                entity.HasOne(v => v.District)
+                    .WithMany(d => d.Venues)
+                    .HasForeignKey(v => v.DistrictId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                // One-to-one relationship with ApplicationUser
+                entity.HasOne(v => v.User)
+                    .WithOne(u => u.Venue)
+                    .HasForeignKey<ApplicationUser>(u => u.VenueId)
+                    .OnDelete(DeleteBehavior.Restrict);
+            });
+        }
+
+        private void ConfigureCustomerProfile(ModelBuilder builder)
+        {
+            builder.Entity<CustomerProfile>(entity =>
+            {
+                entity.Property(e => e.CreatedAt)
+                    .HasDefaultValueSql("GETUTCDATE()");
+
+                entity.Property(e => e.FirstName)
+                    .HasMaxLength(50)
+                    .IsRequired();
+
+                entity.Property(e => e.LastName)
+                    .HasMaxLength(50)
+                    .IsRequired();
+
+                // Ignore the computed properties
+                entity.Ignore(e => e.FullName);
+                entity.Ignore(e => e.FullAddress);
+
+                // One-to-one relationship with ApplicationUser
+                entity.HasOne(c => c.User)
+                    .WithOne(u => u.CustomerProfile)
+                    .HasForeignKey<CustomerProfile>(c => c.UserId)
+                    .OnDelete(DeleteBehavior.Cascade);
+            });
+        }
+
+        private void ConfigureExternalLogin(ModelBuilder builder)
+        {
+            builder.Entity<ExternalLogin>(entity =>
+            {
+                // Primary Key
+                entity.HasKey(e => e.Id);
+
+                // Properties
+                entity.Property(e => e.Provider)
+                    .IsRequired()
+                    .HasMaxLength(50); // Facebook, Google, Apple
+
+                entity.Property(e => e.ProviderUserId)
+                    .IsRequired()
+                    .HasMaxLength(255); // Provider's user ID
+
+                entity.Property(e => e.ProviderEmail)
+                    .HasMaxLength(500); // Email from provider (optional)
+
+                entity.Property(e => e.ProviderDisplayName)
+                    .HasMaxLength(200); // Display name from provider (optional)
+
+                // Indexes
+                entity.HasIndex(e => new { e.Provider, e.ProviderUserId })
+                    .IsUnique()
+                    .HasDatabaseName("IX_ExternalLogin_Provider_ProviderUserId");
+
+                entity.HasIndex(e => e.UserId)
+                    .HasDatabaseName("IX_ExternalLogin_UserId");
+
+                entity.HasIndex(e => e.Provider)
+                    .HasDatabaseName("IX_ExternalLogin_Provider");
+
+                // Relationships
+                entity.HasOne(e => e.User)
+                    .WithMany(u => u.ExternalLogins)
+                    .HasForeignKey(e => e.UserId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                // Table name (optional - EF Core will pluralize by default)
+                entity.ToTable("ExternalLogins");
+            });
+        }
+
+        private void ConfigureGovernorate(ModelBuilder builder)
+        {
+            builder.Entity<Governorate>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+
+                entity.Property(e => e.NameEn)
+                    .IsRequired()
+                    .HasMaxLength(100);
+
+                entity.Property(e => e.NameAr)
+                    .IsRequired()
+                    .HasMaxLength(100);
+
+                entity.HasIndex(e => e.NameEn)
+                    .HasDatabaseName("IX_Governorate_NameEn");
+
+                entity.HasIndex(e => e.NameAr)
+                    .HasDatabaseName("IX_Governorate_NameAr");
+
+                entity.ToTable("Governorates");
+            });
+        }
+
+        private void ConfigureDistrict(ModelBuilder builder)
+        {
+            builder.Entity<District>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+
+                entity.Property(e => e.NameEn)
+                    .IsRequired()
+                    .HasMaxLength(100);
+
+                entity.Property(e => e.NameAr)
+                    .IsRequired()
+                    .HasMaxLength(100);
+
+                entity.HasIndex(e => new { e.GovernorateId, e.NameEn })
+                    .HasDatabaseName("IX_District_GovernorateId_NameEn");
+
+                entity.HasOne(d => d.Governorate)
+                    .WithMany(g => g.Districts)
+                    .HasForeignKey(d => d.GovernorateId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.ToTable("Districts");
+            });
+        }
+    }
+}
