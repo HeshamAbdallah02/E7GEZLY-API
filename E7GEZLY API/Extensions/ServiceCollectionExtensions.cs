@@ -4,6 +4,7 @@ using E7GEZLY_API.Services.Auth;
 using E7GEZLY_API.Services.Communication;
 using E7GEZLY_API.Services.Location;
 using E7GEZLY_API.Services.VenueManagement;
+using E7GEZLY_API.Converters;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
@@ -71,6 +72,7 @@ namespace E7GEZLY_API.Extensions
                 {
                     options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
                     options.JsonSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
+                    options.JsonSerializerOptions.Converters.Add(new TimeSpanJsonConverter());
                 });
 
             services.AddEndpointsApiExplorer();

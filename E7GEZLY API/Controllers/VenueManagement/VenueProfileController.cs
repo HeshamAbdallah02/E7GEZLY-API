@@ -36,7 +36,7 @@ namespace E7GEZLY_API.Controllers.VenueManagement
         /// </summary>
         [HttpPost("complete/court")]
         public async Task<IActionResult> CompleteCourtProfile(
-            [FromBody] CompleteCourtProfileDto dto)
+           [FromBody] CompleteCourtProfileDto dto)
         {
             try
             {
@@ -64,6 +64,18 @@ namespace E7GEZLY_API.Controllers.VenueManagement
             catch (InvalidOperationException ex)
             {
                 _logger.LogWarning(ex, "Invalid operation during court profile completion");
+
+                // Check for specific error message
+                if (ex.Message.Contains("already complete"))
+                {
+                    return BadRequest(new
+                    {
+                        error = "PROFILE_ALREADY_COMPLETE",
+                        message = ex.Message,
+                        suggestion = "Use PUT /api/venue/profile/update/court to update an existing profile"
+                    });
+                }
+
                 return BadRequest(new { message = ex.Message });
             }
             catch (Exception ex)
@@ -104,6 +116,18 @@ namespace E7GEZLY_API.Controllers.VenueManagement
             catch (InvalidOperationException ex)
             {
                 _logger.LogWarning(ex, "Invalid operation during PlayStation profile completion");
+
+                // Check for specific error message
+                if (ex.Message.Contains("already complete"))
+                {
+                    return BadRequest(new
+                    {
+                        error = "PROFILE_ALREADY_COMPLETE",
+                        message = ex.Message,
+                        suggestion = "Use PUT /api/venue/profile/update/playstation to update an existing profile"
+                    });
+                }
+
                 return BadRequest(new { message = ex.Message });
             }
             catch (Exception ex)

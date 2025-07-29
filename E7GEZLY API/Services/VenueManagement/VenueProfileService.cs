@@ -41,6 +41,13 @@ namespace E7GEZLY_API.Services.VenueManagement
 
                 var venue = user.Venue;
 
+                // Check if profile is already complete
+                if (venue.IsProfileComplete)
+                {
+                    throw new InvalidOperationException(
+                        "Venue profile is already complete. Use the update endpoint to modify profile.");
+                }
+
                 // Validate venue type
                 if (venue.VenueType != VenueType.FootballCourt &&
                     venue.VenueType != VenueType.PadelCourt)
@@ -79,6 +86,11 @@ namespace E7GEZLY_API.Services.VenueManagement
                     MapToVenueDetailsDto(venue)
                 );
             }
+            catch (InvalidOperationException)
+            {
+                await transaction.RollbackAsync();
+                throw; // Re-throw to let controller handle it
+            }
             catch (Exception ex)
             {
                 await transaction.RollbackAsync();
@@ -99,6 +111,13 @@ namespace E7GEZLY_API.Services.VenueManagement
                     throw new InvalidOperationException("Venue not found for user");
 
                 var venue = user.Venue;
+
+                // Check if profile is already complete
+                if (venue.IsProfileComplete)
+                {
+                    throw new InvalidOperationException(
+                        "Venue profile is already complete. Use the update endpoint to modify profile.");
+                }
 
                 // Validate venue type
                 if (venue.VenueType != VenueType.PlayStationVenue)
@@ -146,6 +165,11 @@ namespace E7GEZLY_API.Services.VenueManagement
                     true,
                     MapToVenueDetailsDto(venue)
                 );
+            }
+            catch (InvalidOperationException)
+            {
+                await transaction.RollbackAsync();
+                throw; // Re-throw to let controller handle it
             }
             catch (Exception ex)
             {
