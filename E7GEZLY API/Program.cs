@@ -38,3 +38,5 @@ app.UseMiddleware<GlobalExceptionMiddleware>();
 app.ConfigureMiddleware();
 
 app.Run();
+
+public partial class Program { }

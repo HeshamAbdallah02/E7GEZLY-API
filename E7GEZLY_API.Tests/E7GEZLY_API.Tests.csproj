@@ -9,13 +9,6 @@
 		<IsTestProject>true</IsTestProject>
 	</PropertyGroup>
 
-	<Target Name="CopyDepsFiles" AfterTargets="Build">
-		<Copy SourceFiles="$(OutDir)../../E7GEZLY API/bin/$(Configuration)/$(TargetFramework)/E7GEZLY API.deps.json"
-			  DestinationFiles="$(OutDir)testhost.deps.json"
-			  SkipUnchangedFiles="true"
-			  ContinueOnError="true" />
-	</Target>
-
 	<ItemGroup>
 		<Content Include="testsettings.json">
 			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
@@ -36,7 +29,7 @@
 		<PackageReference Include="MSTest.TestAdapter" Version="3.9.3" />
 		<PackageReference Include="MSTest.TestFramework" Version="3.9.3" />
 
-		<!-- Add these coverage packages -->
+		<!-- Coverage packages -->
 		<PackageReference Include="coverlet.collector" Version="6.0.0">
 			<PrivateAssets>all</PrivateAssets>
 			<IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>

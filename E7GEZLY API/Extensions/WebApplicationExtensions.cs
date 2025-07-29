@@ -15,8 +15,19 @@ namespace E7GEZLY_API.Extensions
                 var logger = services.GetRequiredService<ILogger<Program>>();
 
                 var dbContext = services.GetRequiredService<AppDbContext>();
-                await dbContext.Database.MigrateAsync();
-                logger.LogInformation("Database migrated successfully");
+
+                // Check if database is in-memory (used for testing)
+                if (!dbContext.Database.IsInMemory())
+                {
+                    await dbContext.Database.MigrateAsync();
+                    logger.LogInformation("Database migrated successfully");
+                }
+                else
+                {
+                    // For in-memory database, just ensure it's created
+                    await dbContext.Database.EnsureCreatedAsync();
+                    logger.LogInformation("In-memory database created successfully");
+                }
 
                 await DbInitializer.SeedRolesAsync(services);
                 logger.LogInformation("Roles seeded successfully");
@@ -28,6 +39,12 @@ namespace E7GEZLY_API.Extensions
             {
                 var logger = app.Services.GetRequiredService<ILogger<Program>>();
                 logger.LogError(ex, "An error occurred during startup initialization");
+
+                // Re-throw in test environment to make tests fail fast
+                if (app.Environment.EnvironmentName == "Test")
+                {
+                    throw;
+                }
             }
         }
 
@@ -45,7 +62,11 @@ namespace E7GEZLY_API.Extensions
                 app.UseHsts();
             }
 
-            app.UseHttpsRedirection();
+            // Skip HTTPS redirection in test environment
+            if (!app.Environment.EnvironmentName.Equals("Test", StringComparison.OrdinalIgnoreCase))
+            {
+                app.UseHttpsRedirection();
+            }
 
             // CORS
             if (app.Environment.IsDevelopment())
@@ -107,7 +128,7 @@ namespace E7GEZLY_API.Extensions
 
                         var response = new
                         {
-                            error = app.Environment.IsDevelopment()
+                            error = app.Environment.IsDevelopment() || app.Environment.EnvironmentName == "Test"
                                 ? ex.Message
                                 : "An error occurred processing your request",
                             timestamp = DateTime.UtcNow

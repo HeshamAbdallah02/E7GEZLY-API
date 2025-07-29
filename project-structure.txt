@@ -1,5 +1,7 @@
 ﻿E7GEZLY API/
 ├── E7GEZLY API
+│   ├── Attributes
+│   │   └── RequireCompleteProfileAttribute.cs
 │   ├── Controllers
 │   │   ├── Auth
 │   │   │   ├── AccountController.cs
@@ -10,6 +12,9 @@
 │   │   │   ├── TokenController.cs
 │   │   │   ├── VenueAuthController.cs
 │   │   │   └── VerificationController.cs
+│   │   ├── VenueManagement
+│   │   │   ├── VenueBookingController.cs
+│   │   │   └── VenueProfileController.cs
 │   │   ├── LocationController.cs
 │   │   └── TestController.cs
 │   ├── Data
@@ -38,6 +43,7 @@
 │   │   ├── User
 │   │   │   └── UserDtos.cs
 │   │   └── Venue
+│   │       ├── VenueProfileCompletionDtos.cs
 │   │       └── VenueProfileDtos.cs
 │   ├── Exceptions
 │   │   └── GeocodingException.cs
@@ -52,6 +58,8 @@
 │   │   └── WebApplicationExtensions.cs
 │   ├── HealthChecks
 │   │   └── NominatimHealthCheck.cs
+│   ├── Middleware
+│   │   └── GlobalExceptionMiddleware.cs
 │   ├── Migrations
 │   │   ├── 20250722134948_InitialCreate.cs
 │   │   ├── 20250722134948_InitialCreate.Designer.cs
@@ -63,6 +71,10 @@
 │   │   ├── 20250724115036_RemoveRefreshTokenFromUser.Designer.cs
 │   │   ├── 20250726133303_AddExternalLoginsTable.cs
 │   │   ├── 20250726133303_AddExternalLoginsTable.Designer.cs
+│   │   ├── 20250728210408_AddVenueProfileCompletionEntities.cs
+│   │   ├── 20250728210408_AddVenueProfileCompletionEntities.Designer.cs
+│   │   ├── 20250729111213_UpdateVenueProfileCompletionEntities.cs
+│   │   ├── 20250729111213_UpdateVenueProfileCompletionEntities.Designer.cs
 │   │   └── AppDbContextModelSnapshot.cs
 │   ├── Models
 │   │   ├── ApplicationUser.cs
@@ -72,7 +84,11 @@
 │   │   ├── Location.cs
 │   │   ├── Reservation.cs
 │   │   ├── UserSession.cs
-│   │   └── Venue.cs
+│   │   ├── Venue.cs
+│   │   ├── VenueImage.cs
+│   │   ├── VenuePlayStationDetails.cs
+│   │   ├── VenuePricing.cs
+│   │   └── VenueWorkingHours.cs
 │   ├── Properties
 │   │   └── launchSettings.json
 │   ├── Services
@@ -93,12 +109,15 @@
 │   │   │   ├── MockEmailService.cs
 │   │   │   ├── MockSmsService.cs
 │   │   │   └── SendGridEmailService.cs
-│   │   └── Location
-│   │       ├── CachedGeocodingService.cs
-│   │       ├── IGeocodingService.cs
-│   │       ├── ILocationService.cs
-│   │       ├── LocationService.cs
-│   │       └── NominatimGeocodingService.cs
+│   │   ├── Location
+│   │   │   ├── CachedGeocodingService.cs
+│   │   │   ├── IGeocodingService.cs
+│   │   │   ├── ILocationService.cs
+│   │   │   ├── LocationService.cs
+│   │   │   └── NominatimGeocodingService.cs
+│   │   └── VenueManagement
+│   │       ├── IVenueProfileService.cs
+│   │       └── VenueProfileService.cs
 │   ├── Tests
 │   │   ├── Integration
 │   │   │   └── GeocodingServiceTests.cs
@@ -124,7 +143,15 @@
 │   ├── TestHelpers
 │   │   └── TestDataFactory.cs
 │   ├── TestResults
-│   │   └── Deploy_20109 20250721T183159_23964
+│   │   ├── Deploy_20109 20250721T183159_23964
+│   │   │   ├── In
+│   │   │   │   └── LAPTOP-V8R4T203
+│   │   │   └── Out
+│   │   ├── Deploy_20109 20250729T142930_17452
+│   │   │   ├── In
+│   │   │   │   └── LAPTOP-V8R4T203
+│   │   │   └── Out
+│   │   └── Deploy_20109 20250729T150114_28588
 │   │       ├── In
 │   │       │   └── LAPTOP-V8R4T203
 │   │       └── Out
@@ -133,16 +160,28 @@
 │   │       ├── GeocodingServiceTests.cs
 │   │       ├── LocationServiceTests.cs
 │   │       ├── TokenServiceTests.cs
+│   │       ├── VenueProfileServiceTests.cs
 │   │       └── VerificationServiceTests.cs
 │   ├── E7GEZLY_API.Tests.csproj
 │   └── testsettings.json
 ├── TestResults
-│   └── CoverageReport
+│   ├── CoverageReport
+│   └── Deploy_20109 20250729T145937_21104
+│       ├── In
+│       │   └── LAPTOP-V8R4T203
+│       └── Out
+├── .gitattributes
+├── .gitignore
+├── API-Documentation.md
 ├── copy-test-files.bat
 ├── dotnet
 ├── E7GEZLY API.sln
+├── Flutter-Integration-Guide.md
+├── Multi-Device-Session-Handling-Guide.md
 ├── project-structure.txt
+├── README.md
 ├── run-coverage.ps1
 ├── run-coverage.sh
 ├── run-full-coverage.ps1
-└── run-unit-coverage.ps1
+├── run-unit-coverage.ps1
+└── Social-Authentication-Setup-Guide.md

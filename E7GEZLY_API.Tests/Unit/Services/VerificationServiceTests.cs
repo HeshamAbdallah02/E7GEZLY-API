@@ -1,8 +1,11 @@
 ﻿using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.Extensions.Hosting;
 using Moq;
 using E7GEZLY_API.Services.Auth;
+using E7GEZLY_API.Services.Communication;
 using E7GEZLY_API.Tests.Categories;
 using System;
 using System.Threading.Tasks;
@@ -17,14 +20,32 @@ namespace E7GEZLY_API.Tests.Unit.Services
         private VerificationService? _verificationService;
         private Mock<ILogger<VerificationService>>? _mockLogger;
         private Mock<IConfiguration>? _mockConfiguration;
+        private Mock<IEmailService>? _mockEmailService;
+        private Mock<IWebHostEnvironment>? _mockWebHostEnvironment;
 
         [TestInitialize]
         public void Setup()
         {
             _mockLogger = new Mock<ILogger<VerificationService>>();
             _mockConfiguration = new Mock<IConfiguration>();
-            
-            _verificationService = new VerificationService(_mockLogger.Object, _mockConfiguration.Object);
+            _mockEmailService = new Mock<IEmailService>();
+            _mockWebHostEnvironment = new Mock<IWebHostEnvironment>();
+
+            // Setup environment as Development - mock the property, not the extension method
+            _mockWebHostEnvironment.Setup(x => x.EnvironmentName).Returns(Environments.Development);
+
+            // Setup email service to return success by default
+            _mockEmailService.Setup(x => x.SendVerificationEmailAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()))
+                .ReturnsAsync(true);
+
+            // Setup configuration for default language
+            _mockConfiguration.Setup(x => x["Email:DefaultLanguage"]).Returns("ar");
+
+            _verificationService = new VerificationService(
+                _mockLogger.Object,
+                _mockConfiguration.Object,
+                _mockEmailService.Object,
+                _mockWebHostEnvironment.Object);
         }
 
         [TestMethod]
@@ -75,7 +96,7 @@ namespace E7GEZLY_API.Tests.Unit.Services
                 x => x.Log(
                     LogLevel.Information,
                     It.IsAny<EventId>(),
-                    It.Is<It.IsAnyType>((o, t) => o.ToString()!.Contains($"Sending verification code {code} to phone number +2{phoneNumber}")),
+                    It.Is<It.IsAnyType>((o, t) => o.ToString()!.Contains($"[DEV MODE] Phone verification code for +2{phoneNumber}: {code}")),
                     It.IsAny<Exception>(),
                     It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
                 Times.Once);
@@ -97,7 +118,7 @@ namespace E7GEZLY_API.Tests.Unit.Services
                 x => x.Log(
                     LogLevel.Information,
                     It.IsAny<EventId>(),
-                    It.Is<It.IsAnyType>((o, t) => o.ToString()!.Contains($"Sending verification code {code} to email {email}")),
+                    It.Is<It.IsAnyType>((o, t) => o.ToString()!.Contains($"Email verification sent successfully to {email}")),
                     It.IsAny<Exception>(),
                     It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
                 Times.Once);

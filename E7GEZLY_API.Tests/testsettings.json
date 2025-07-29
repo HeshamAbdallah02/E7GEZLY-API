@@ -6,9 +6,33 @@
       "Microsoft": "Warning"
     }
   },
+  "ConnectionStrings": {
+    "DefaultConnection": "InMemory"
+  },
+  "Jwt": {
+    "Secret": "8dd98f147f72f2f39dd96d6a24b0588b",
+    "Issuer": "E7GEZLY_TEST",
+    "Audience": "E7GEZLY_TEST_USERS",
+    "ExpiryInMinutes": 60,
+    "RefreshTokenExpiryInDays": 30
+  },
+  "SendGrid": {
+    "ApiKey": "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",
+    "FromEmail": "hesham.abdalla2002@gmail.com",
+    "FromName": "E7GEZLY"
+  },
+  "Email": {
+    "DefaultLanguage": "ar"
+  },
   "Testing": {
     "UseRealNominatim": false,
     "MockResponsesPath": "Tests/MockData/",
     "NominatimTimeout": 5
+  },
+  "Authentication": {
+    "Google": {
+      "ClientId": "217382237407-inuehl7aecm48b3ag3r47peb49dn00rq.apps.googleusercontent.com",
+      "ClientSecret": "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"
+    }
   }
 }

@@ -1,11 +1,11 @@
-﻿// E7GEZLY_API.Tests/Unit/Services/VenueProfileServiceTests.cs
-using E7GEZLY_API.Data;
+﻿using E7GEZLY_API.Data;
 using E7GEZLY_API.DTOs.Venue;
 using E7GEZLY_API.Models;
 using E7GEZLY_API.Services.VenueManagement;
 using E7GEZLY_API.Tests.Categories;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Logging;
 using Moq;
 
@@ -25,6 +25,7 @@ namespace E7GEZLY_API.Tests.Unit.Services
         {
             var options = new DbContextOptionsBuilder<AppDbContext>()
                 .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
+                .ConfigureWarnings(w => w.Ignore(InMemoryEventId.TransactionIgnoredWarning))
                 .Options;
             _context = new AppDbContext(options);
 
@@ -127,6 +128,7 @@ namespace E7GEZLY_API.Tests.Unit.Services
             var venue = new Venue
             {
                 Id = Guid.NewGuid(),
+                Name = "Test PlayStation Venue",  // Add Name property
                 VenueType = VenueType.PlayStationVenue
             };
             user.Venue = venue;

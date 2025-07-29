@@ -1,15 +1,18 @@
 ﻿using E7GEZLY_API.Data;
 using E7GEZLY_API.DTOs.Auth;
 using E7GEZLY_API.Models;
+using E7GEZLY_API.Services.Communication;
 using E7GEZLY_API.Tests.Categories;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.VisualStudio.TestPlatform.TestHost;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Moq;
 using System.Net;
 using System.Net.Http;
 using System.Text;
@@ -27,22 +30,23 @@ namespace E7GEZLY_API.Tests.Integration.Controllers
         private WebApplicationFactory<Program>? _factory;
         private HttpClient? _client;
         private JsonSerializerOptions? _jsonOptions;
+        private string _databaseName = null!;
 
         [TestInitialize]
         public void Setup()
         {
+            // Use a unique but consistent database name for this test run
+            _databaseName = $"TestDb_{Guid.NewGuid()}";
+
             _factory = new WebApplicationFactory<Program>()
                 .WithWebHostBuilder(builder =>
                 {
-                    // Set the content root explicitly
-                    var projectDir = Directory.GetCurrentDirectory();
-                    var configPath = Path.Combine(projectDir, "appsettings.json");
+                    builder.UseEnvironment("Test");
 
-                    builder.UseContentRoot(projectDir);
-
+                    // Add test configuration
                     builder.ConfigureAppConfiguration((context, config) =>
                     {
-                        config.AddJsonFile(configPath, optional: true);
+                        config.AddJsonFile("testsettings.json", optional: false, reloadOnChange: true);
                     });
 
                     builder.ConfigureServices(services =>
@@ -55,26 +59,36 @@ namespace E7GEZLY_API.Tests.Integration.Controllers
                             services.Remove(descriptor);
                         }
 
-                        // Add in-memory database for testing
+                        // Add in-memory database for testing with a specific name
                         services.AddDbContext<AppDbContext>(options =>
                         {
-                            options.UseInMemoryDatabase($"TestDb_{Guid.NewGuid()}");
+                            options.UseInMemoryDatabase(_databaseName);
+                            options.ConfigureWarnings(w => w.Ignore(InMemoryEventId.TransactionIgnoredWarning));
                         });
 
-                        // Build service provider
-                        var sp = services.BuildServiceProvider();
+                        // Replace email service with mock
+                        services.RemoveAll<IEmailService>();
+                        var mockEmailService = new Mock<IEmailService>();
+                        mockEmailService.Setup(x => x.SendVerificationEmailAsync(
+                            It.IsAny<string>(),
+                            It.IsAny<string>(),
+                            It.IsAny<string>(),
+                            It.IsAny<string>()))
+                            .ReturnsAsync(true);
+                        mockEmailService.Setup(x => x.SendPasswordResetEmailAsync(
+                            It.IsAny<string>(),
+                            It.IsAny<string>(),
+                            It.IsAny<string>(),
+                            It.IsAny<string>()))
+                            .ReturnsAsync(true);
+                        mockEmailService.Setup(x => x.SendWelcomeEmailAsync(
+                            It.IsAny<string>(),
+                            It.IsAny<string>(),
+                            It.IsAny<string>(),
+                            It.IsAny<string>()))
+                            .ReturnsAsync(true);
 
-                        // Create scope to seed database
-                        using (var scope = sp.CreateScope())
-                        {
-                            var scopedServices = scope.ServiceProvider;
-                            var db = scopedServices.GetRequiredService<AppDbContext>();
-
-                            db.Database.EnsureCreated();
-
-                            // Seed test data
-                            DbInitializer.SeedRolesAsync(scopedServices).GetAwaiter().GetResult();
-                        }
+                        services.AddSingleton(mockEmailService.Object);
                     });
                 });
 
@@ -88,7 +102,7 @@ namespace E7GEZLY_API.Tests.Integration.Controllers
         [TestMethod]
         public async Task SendVerificationCode_ValidUser_ReturnsSuccess()
         {
-            // Arrange - Create a user first
+            // Arrange - Create a user first using the factory's services
             string userId;
             using (var scope = _factory!.Services.CreateScope())
             {
@@ -103,10 +117,11 @@ namespace E7GEZLY_API.Tests.Integration.Controllers
                 userId = user.Id;
             }
 
-            // Use the record constructor
+            // Use the record constructor - add Purpose parameter
             var sendDto = new SendVerificationCodeDto(
                 UserId: userId,
-                Method: VerificationMethod.Email
+                Method: VerificationMethod.Email,
+                Purpose: VerificationPurpose.AccountVerification
             );
 
             var json = JsonSerializer.Serialize(sendDto);
@@ -116,9 +131,16 @@ namespace E7GEZLY_API.Tests.Integration.Controllers
             var response = await _client!.PostAsync("/api/auth/verify/send", content);
             var responseContent = await response.Content.ReadAsStringAsync();
 
+            // Debug output if test fails
+            if (response.StatusCode != HttpStatusCode.OK)
+            {
+                Console.WriteLine($"Response Status: {response.StatusCode}");
+                Console.WriteLine($"Response Content: {responseContent}");
+            }
+
             // Assert
             Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-            Assert.IsTrue(responseContent.Contains("Success"));
+            Assert.IsTrue(responseContent.Contains("success") || responseContent.Contains("Success"));
         }
 
         [TestMethod]
@@ -140,7 +162,9 @@ namespace E7GEZLY_API.Tests.Integration.Controllers
                     EmailVerificationCodeExpiry = DateTime.UtcNow.AddMinutes(10)
                 };
                 await userManager.CreateAsync(user, "Test123!");
-                await userManager.AddToRoleAsync(user, DbInitializer.AppRoles.Customer);
+
+                // Use the correct role name (case sensitive)
+                await userManager.AddToRoleAsync(user, "Customer");
                 userId = user.Id;
             }
 
@@ -158,9 +182,16 @@ namespace E7GEZLY_API.Tests.Integration.Controllers
             var response = await _client!.PostAsync("/api/auth/verify", content);
             var responseContent = await response.Content.ReadAsStringAsync();
 
+            // Debug output if test fails
+            if (response.StatusCode != HttpStatusCode.OK)
+            {
+                Console.WriteLine($"Response Status: {response.StatusCode}");
+                Console.WriteLine($"Response Content: {responseContent}");
+            }
+
             // Assert
             Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-            Assert.IsTrue(responseContent.Contains("Tokens"));
+            Assert.IsTrue(responseContent.Contains("tokens") || responseContent.Contains("Tokens"));
         }
 
         [TestMethod]
@@ -196,6 +227,14 @@ namespace E7GEZLY_API.Tests.Integration.Controllers
 
             // Act
             var response = await _client!.PostAsync("/api/auth/verify", content);
+            var responseContent = await response.Content.ReadAsStringAsync();
+
+            // Debug output if test fails
+            if (response.StatusCode != HttpStatusCode.BadRequest)
+            {
+                Console.WriteLine($"Response Status: {response.StatusCode}");
+                Console.WriteLine($"Response Content: {responseContent}");
+            }
 
             // Assert
             Assert.AreEqual(HttpStatusCode.BadRequest, response.StatusCode);
@@ -204,10 +243,11 @@ namespace E7GEZLY_API.Tests.Integration.Controllers
         [TestMethod]
         public async Task SendVerificationCode_NonExistentUser_ReturnsNotFound()
         {
-            // Arrange
+            // Arrange - add Purpose parameter
             var sendDto = new SendVerificationCodeDto(
                 UserId: "non-existent-user-id",
-                Method: VerificationMethod.Email
+                Method: VerificationMethod.Email,
+                Purpose: VerificationPurpose.AccountVerification
             );
 
             var json = JsonSerializer.Serialize(sendDto);
@@ -253,6 +293,14 @@ namespace E7GEZLY_API.Tests.Integration.Controllers
 
             // Act
             var response = await _client!.PostAsync("/api/auth/verify", content);
+            var responseContent = await response.Content.ReadAsStringAsync();
+
+            // Debug output if test fails
+            if (response.StatusCode != HttpStatusCode.BadRequest)
+            {
+                Console.WriteLine($"Response Status: {response.StatusCode}");
+                Console.WriteLine($"Response Content: {responseContent}");
+            }
 
             // Assert
             Assert.AreEqual(HttpStatusCode.BadRequest, response.StatusCode);
