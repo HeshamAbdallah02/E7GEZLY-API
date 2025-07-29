@@ -256,12 +256,14 @@ namespace E7GEZLY_API.Controllers.Auth
         }
 
         [HttpPost("login")]
-        public async Task<IActionResult> CustomerLogin(LoginDto dto)
+        public async Task<IActionResult> CustomerLogin([FromBody] LoginDto dto)
         {
             try
             {
-                var user = await _userManager.FindByEmailAsync(dto.Email);
-                if (user == null || user.VenueId != null)
+                // Find user by email or phone
+                ApplicationUser? user = await FindUserByEmailOrPhoneAsync(dto.EmailOrPhone);
+
+                if (user == null || user.VenueId != null) // Ensure it's a customer
                 {
                     return Unauthorized(new { message = "Invalid credentials" });
                 }
@@ -300,22 +302,45 @@ namespace E7GEZLY_API.Controllers.Auth
 
                 var tokens = await _tokenService.GenerateTokensAsync(user, sessionInfo);
 
-                // Get customer profile
+                // Get customer profile with location
                 var customerProfile = await _context.CustomerProfiles
+                    .Include(cp => cp.District)
+                    .ThenInclude(d => d!.Governorate)
                     .FirstOrDefaultAsync(cp => cp.UserId == user.Id);
 
                 return Ok(new
                 {
+                    success = true,
                     tokens = tokens,
                     user = new
                     {
                         id = user.Id,
                         email = user.Email,
-                        firstName = customerProfile?.FirstName,
-                        lastName = customerProfile?.LastName,
                         phoneNumber = user.PhoneNumber,
-                        dateOfBirth = customerProfile?.DateOfBirth
-                    }
+                        isPhoneVerified = user.IsPhoneNumberVerified,
+                        isEmailVerified = user.IsEmailVerified
+                    },
+                    profile = customerProfile != null ? new
+                    {
+                        id = customerProfile.Id,
+                        firstName = customerProfile.FirstName,
+                        lastName = customerProfile.LastName,
+                        dateOfBirth = customerProfile.DateOfBirth,
+                        fullAddress = customerProfile.FullAddress,
+                        location = customerProfile.DistrictId.HasValue ? new
+                        {
+                            districtId = customerProfile.DistrictId,
+                            districtName = customerProfile.District?.NameEn,
+                            districtNameAr = customerProfile.District?.NameAr,
+                            governorateId = customerProfile.District?.GovernorateId,
+                            governorateName = customerProfile.District?.Governorate?.NameEn,
+                            governorateNameAr = customerProfile.District?.Governorate?.NameAr,
+                            streetAddress = customerProfile.StreetAddress,
+                            landmark = customerProfile.Landmark
+                        } : null
+                    } : null,
+                    requiredActions = GetCustomerRequiredActions(user, customerProfile),
+                    metadata = GetCustomerAuthMetadata(user, customerProfile)
                 });
             }
             catch (Exception ex)
@@ -323,6 +348,131 @@ namespace E7GEZLY_API.Controllers.Auth
                 _logger.LogError(ex, "Error during customer login");
                 return StatusCode(500, new { message = "An error occurred during login" });
             }
+        }
+
+        // Helper method to find user by email or phone
+        private async Task<ApplicationUser?> FindUserByEmailOrPhoneAsync(string emailOrPhone)
+        {
+            ApplicationUser? user;
+
+            // Check if input is email
+            if (emailOrPhone.Contains('@'))
+            {
+                user = await _userManager.FindByEmailAsync(emailOrPhone);
+            }
+            else
+            {
+                // Format phone number
+                var formattedPhone = FormatEgyptianPhoneNumber(emailOrPhone);
+                user = await _userManager.Users
+                    .FirstOrDefaultAsync(u => u.PhoneNumber == formattedPhone);
+            }
+
+            return user;
+        }
+
+        // Helper method to format Egyptian phone numbers
+        private string FormatEgyptianPhoneNumber(string phoneNumber)
+        {
+            // Remove any spaces, dashes, or special characters
+            var cleaned = phoneNumber.Replace(" ", "")
+                                   .Replace("-", "")
+                                   .Replace("(", "")
+                                   .Replace(")", "")
+                                   .Replace("+", "");
+
+            // Handle different Egyptian phone number formats
+            if (cleaned.StartsWith("200")) // +200 instead of +20
+            {
+                cleaned = cleaned.Substring(1); // Remove the extra 0
+            }
+
+            // Add +20 prefix
+            if (cleaned.StartsWith("20"))
+            {
+                cleaned = "+" + cleaned;
+            }
+            else if (cleaned.StartsWith("0"))
+            {
+                // Replace leading 0 with +20
+                cleaned = "+20" + cleaned.Substring(1);
+            }
+            else if (cleaned.Length == 10 && cleaned.StartsWith("1")) // Just 10 digits starting with 1
+            {
+                cleaned = "+20" + cleaned;
+            }
+            else if (!cleaned.StartsWith("+"))
+            {
+                cleaned = "+20" + cleaned;
+            }
+
+            // Validate Egyptian phone number format
+            // Should be +201XXXXXXXXX (13 characters total)
+            if (cleaned.Length != 13 || !cleaned.StartsWith("+201"))
+            {
+                _logger.LogWarning($"Invalid phone number format: {phoneNumber} -> {cleaned}");
+            }
+
+            return cleaned;
+        }
+
+        // Helper method to get required actions for customers
+        private List<string> GetCustomerRequiredActions(ApplicationUser user, CustomerProfile? profile)
+        {
+            var actions = new List<string>();
+
+            // Check if profile exists and is complete
+            if (profile == null)
+            {
+                actions.Add("CREATE_PROFILE");
+            }
+            else
+            {
+                // Check for incomplete profile fields
+                if (string.IsNullOrWhiteSpace(profile.FirstName) ||
+                    string.IsNullOrWhiteSpace(profile.LastName))
+                {
+                    actions.Add("COMPLETE_BASIC_INFO");
+                }
+
+                if (!profile.DateOfBirth.HasValue)
+                {
+                    actions.Add("ADD_BIRTH_DATE");
+                }
+
+                if (!profile.DistrictId.HasValue ||
+                    string.IsNullOrWhiteSpace(profile.StreetAddress))
+                {
+                    actions.Add("ADD_ADDRESS");
+                }
+            }
+
+            // Future: Add other checks
+            // if (!user.HasCompletedOnboarding)
+            //     actions.Add("COMPLETE_ONBOARDING");
+
+            return actions;
+        }
+
+        // Helper method to get metadata for customer auth
+        private AuthMetadataDto? GetCustomerAuthMetadata(ApplicationUser user, CustomerProfile? profile)
+        {
+            if (profile == null || GetCustomerRequiredActions(user, profile).Any())
+            {
+                return new AuthMetadataDto(
+                    ProfileCompletionUrl: "/api/customer/profile",
+                    NextStepDescription: profile == null
+                        ? "Please create your profile to start booking venues"
+                        : "Please complete your profile information",
+                    AdditionalData: new Dictionary<string, object>
+                    {
+                        ["hasProfile"] = profile != null,
+                        ["estimatedCompletionTime"] = "2-3 minutes"
+                    }
+                );
+            }
+
+            return null;
         }
     }
 }

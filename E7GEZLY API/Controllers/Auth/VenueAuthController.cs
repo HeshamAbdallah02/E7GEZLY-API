@@ -2,6 +2,7 @@
 using E7GEZLY_API.Data;
 using E7GEZLY_API.DTOs.Auth;
 using E7GEZLY_API.DTOs.Location;
+using E7GEZLY_API.Attributes;
 using E7GEZLY_API.Extensions;
 using E7GEZLY_API.Models;
 using E7GEZLY_API.Services.Auth;
@@ -64,7 +65,7 @@ namespace E7GEZLY_API.Controllers.Auth
                     Id = Guid.NewGuid(),
                     Name = dto.VenueName,
                     VenueType = dto.VenueType,
-                    Features = DetermineVenueFeatures(dto.VenueType),
+                    //Features = DetermineVenueFeatures(dto.VenueType),
                     CreatedAt = DateTime.UtcNow,
                     UpdatedAt = DateTime.UtcNow
                 };
@@ -197,11 +198,13 @@ namespace E7GEZLY_API.Controllers.Auth
 
 
         [HttpPost("login")]
-        public async Task<IActionResult> VenueLogin(LoginDto dto)
+        public async Task<IActionResult> Login([FromBody] LoginDto dto)
         {
             try
             {
-                var user = await _userManager.FindByEmailAsync(dto.Email);
+                // Find user by email or phone
+                ApplicationUser? user = await FindUserByEmailOrPhoneAsync(dto.EmailOrPhone);
+
                 if (user == null || user.VenueId == null)
                 {
                     return Unauthorized(new { message = "Invalid credentials" });
@@ -241,7 +244,7 @@ namespace E7GEZLY_API.Controllers.Auth
 
                 _logger.LogInformation($"Venue logged in: {venue.Name}");
 
-                // Create session info using extension methods
+                // Create session info
                 var sessionInfo = new CreateSessionDto(
                     DeviceName: HttpContext.GetDeviceName(),
                     DeviceType: HttpContext.DetectDeviceType(),
@@ -251,24 +254,35 @@ namespace E7GEZLY_API.Controllers.Auth
 
                 var tokens = await _tokenService.GenerateTokensAsync(user, sessionInfo);
 
-                return Ok(new
+                // Determine required actions
+                var requiredActions = GetRequiredActions(user, venue);
+                var metadata = GetAuthMetadata(venue);
+
+                // Build the response
+                var response = new
                 {
-                    tokens = tokens,
-                    user = new
-                    {
-                        id = user.Id,
-                        email = user.Email,
-                        phoneNumber = user.PhoneNumber,
-                        venueId = venue.Id
-                    },
-                    venue = new
-                    {
-                        id = venue.Id,
-                        name = venue.Name,
-                        type = venue.VenueType.ToString(),
-                        features = venue.Features,
-                        isProfileComplete = venue.IsProfileComplete,
-                        location = venue.IsProfileComplete ? new
+                    // Token information
+                    accessToken = tokens.AccessToken,
+                    refreshToken = tokens.RefreshToken,
+                    accessTokenExpiry = tokens.AccessTokenExpiry,
+                    expiresAt = tokens.AccessTokenExpiry, // For backward compatibility
+
+                    // User information
+                    user = new UserAuthInfoDto(
+                        Id: user.Id,
+                        Email: user.Email!,
+                        PhoneNumber: user.PhoneNumber,
+                        IsPhoneVerified: user.IsPhoneNumberVerified,
+                        IsEmailVerified: user.IsEmailVerified
+                    ),
+
+                    // Venue information
+                    venue = new VenueAuthInfoDto(
+                        Id: venue.Id,
+                        Name: venue.Name,
+                        Type: venue.VenueType.ToString(),
+                        IsProfileComplete: venue.IsProfileComplete,
+                        Location: venue.IsProfileComplete ? new
                         {
                             latitude = venue.Latitude,
                             longitude = venue.Longitude,
@@ -277,8 +291,14 @@ namespace E7GEZLY_API.Controllers.Auth
                             governorate = venue.District?.Governorate?.NameEn,
                             fullAddress = venue.FullAddress
                         } : null
-                    }
-                });
+                    ),
+
+                    // Actions and metadata
+                    requiredActions,
+                    metadata
+                };
+
+                return Ok(response);
             }
             catch (Exception ex)
             {
@@ -287,32 +307,91 @@ namespace E7GEZLY_API.Controllers.Auth
             }
         }
 
-        private VenueFeatures DetermineVenueFeatures(VenueType venueType)
+        // Add these helper methods:
+        private async Task<ApplicationUser?> FindUserByEmailOrPhoneAsync(string emailOrPhone)
         {
-            return venueType switch
+            ApplicationUser? user;
+
+            // Check if input is email
+            if (emailOrPhone.Contains('@'))
             {
-                VenueType.PlayStationVenue => VenueFeatures.DesktopAccess |
-                                            VenueFeatures.OnlineBooking |
-                                            VenueFeatures.HasInventory |
-                                            VenueFeatures.AcceptsCash |
-                                            VenueFeatures.AcceptsCard,
+                user = await _userManager.FindByEmailAsync(emailOrPhone);
+            }
+            else
+            {
+                // Format phone number
+                var formattedPhone = FormatPhoneNumber(emailOrPhone);
+                user = await _userManager.Users
+                    .FirstOrDefaultAsync(u => u.PhoneNumber == formattedPhone);
+            }
 
-                VenueType.FootballCourt => VenueFeatures.OnlineBooking |
-                                         VenueFeatures.RequiresDeposit |
-                                         VenueFeatures.AcceptsCash,
+            return user;
+        }
 
-                VenueType.PadelCourt => VenueFeatures.OnlineBooking |
-                                      VenueFeatures.RequiresDeposit |
-                                      VenueFeatures.AcceptsCash |
-                                      VenueFeatures.AcceptsCard,
+        private string FormatPhoneNumber(string phoneNumber)
+        {
+            // Remove any spaces or special characters
+            var cleaned = phoneNumber.Replace(" ", "").Replace("-", "").Replace("(", "").Replace(")", "");
 
-                VenueType.BilliardHall => VenueFeatures.OnlineBooking |
-                                        VenueFeatures.HasInventory |
-                                        VenueFeatures.AcceptsCash |
-                                        VenueFeatures.AcceptsCard,
+            // Add +20 if not present
+            if (!cleaned.StartsWith("+"))
+            {
+                if (cleaned.StartsWith("20"))
+                {
+                    cleaned = "+" + cleaned;
+                }
+                else if (cleaned.StartsWith("0"))
+                {
+                    cleaned = "+20" + cleaned.Substring(1);
+                }
+                else
+                {
+                    cleaned = "+20" + cleaned;
+                }
+            }
 
-                _ => VenueFeatures.OnlineBooking | VenueFeatures.AcceptsCash
-            };
+            return cleaned;
+        }
+
+        private List<string> GetRequiredActions(ApplicationUser user, Models.Venue venue)
+        {
+            var actions = new List<string>();
+
+            if (!venue.IsProfileComplete)
+                actions.Add("COMPLETE_PROFILE");
+
+            // Future actions can be added here
+            // if (!venue.IsVerified)
+            //     actions.Add("AWAIT_ADMIN_VERIFICATION");
+
+            // if (!venue.HasActiveSubscription)
+            //     actions.Add("CHOOSE_SUBSCRIPTION_PLAN");
+
+            return actions;
+        }
+
+        private AuthMetadataDto? GetAuthMetadata(Models.Venue venue)
+        {
+            if (!venue.IsProfileComplete)
+            {
+                return new AuthMetadataDto(
+                    ProfileCompletionUrl: venue.VenueType switch
+                    {
+                        VenueType.PlayStationVenue => "/api/venue/profile/complete/playstation",
+                        VenueType.FootballCourt => "/api/venue/profile/complete/court",
+                        VenueType.PadelCourt => "/api/venue/profile/complete/court",
+                        _ => "/api/venue/profile/complete"
+                    },
+                    NextStepDescription: "Complete your venue profile to start receiving bookings",
+                    AdditionalData: new Dictionary<string, object>
+                    {
+                        ["venueType"] = venue.VenueType.ToString(),
+                        ["estimatedCompletionTime"] = "5-10 minutes"
+                    }
+                );
+            }
+
+            return null;
         }
     }
 }

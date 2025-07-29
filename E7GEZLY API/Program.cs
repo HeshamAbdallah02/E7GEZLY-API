@@ -1,5 +1,6 @@
 using E7GEZLY_API.Data;
 using E7GEZLY_API.Extensions;
+using E7GEZLY_API.Middleware;
 using E7GEZLY_API.Services.BackgroundServices;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -29,6 +30,9 @@ await app.InitializeDatabaseAsync();
 
 // Use health checks
 app.UseHealthChecks();
+
+// Use Global Exception Middleware
+app.UseMiddleware<GlobalExceptionMiddleware>();
 
 // Configure the HTTP request pipeline
 app.ConfigureMiddleware();

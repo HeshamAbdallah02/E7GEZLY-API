@@ -65,7 +65,6 @@ namespace E7GEZLY_API.Services.Auth
                     claims.Add(new Claim("venueId", venue.Id.ToString()));
                     claims.Add(new Claim("venueName", venue.Name));
                     claims.Add(new Claim("venueType", venue.VenueType.ToString()));
-                    claims.Add(new Claim("venueFeatures", ((int)venue.Features).ToString()));
 
                     userInfo["venueId"] = venue.Id.ToString();
                     userInfo["venueName"] = venue.Name;

@@ -15,8 +15,6 @@ namespace E7GEZLY_API.DTOs.Venue
         string Name,
         string Type,
         int TypeValue,
-        string Features,
-        int FeaturesValue,
         bool IsProfileComplete,
         DateTime CreatedAt,
         DateTime UpdatedAt,

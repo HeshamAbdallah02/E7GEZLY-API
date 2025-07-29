@@ -138,7 +138,6 @@ namespace E7GEZLY_API.Tests.Integration.Services
                 Id = venueId,
                 Name = "Test Venue",
                 VenueType = VenueType.PlayStationVenue,
-                Features = VenueFeatures.OnlineBooking | VenueFeatures.AcceptsCash,
                 Latitude = 30.0444,
                 Longitude = 31.2357,
                 DistrictId = district.Id,

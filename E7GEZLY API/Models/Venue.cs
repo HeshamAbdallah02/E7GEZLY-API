@@ -64,6 +64,12 @@ namespace E7GEZLY_API.Models
         public virtual ICollection<Reservation> Reservations { get; set; } = new List<Reservation>();
 
         public bool IsProfileComplete { get; set; } = false;
+
+        // Profile completion related
+        public virtual ICollection<VenueWorkingHours> WorkingHours { get; set; } = new List<VenueWorkingHours>();
+        public virtual ICollection<VenuePricing> Pricing { get; set; } = new List<VenuePricing>();
+        public virtual ICollection<VenueImage> Images { get; set; } = new List<VenueImage>();
+        public virtual VenuePlayStationDetails? PlayStationDetails { get; set; }
     }
 
     public enum VenueType

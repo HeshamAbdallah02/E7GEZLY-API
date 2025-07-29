@@ -149,8 +149,6 @@ namespace E7GEZLY_API.Services.Auth
                 venue.Name,
                 venue.VenueType.ToString(),
                 (int)venue.VenueType,
-                venue.Features.ToString(),
-                (int)venue.Features,
                 venue.IsProfileComplete,
                 venue.CreatedAt,
                 venue.UpdatedAt,

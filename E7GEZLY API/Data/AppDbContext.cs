@@ -19,6 +19,10 @@ namespace E7GEZLY_API.Data
         public DbSet<Governorate> Governorates { get; set; }
         public DbSet<District> Districts { get; set; }
         public DbSet<ExternalLogin> ExternalLogins => Set<ExternalLogin>();
+        public DbSet<VenueWorkingHours> VenueWorkingHours => Set<VenueWorkingHours>();
+        public DbSet<VenuePricing> VenuePricing => Set<VenuePricing>();
+        public DbSet<VenueImage> VenueImages => Set<VenueImage>();
+        public DbSet<VenuePlayStationDetails> VenuePlayStationDetails => Set<VenuePlayStationDetails>();
 
         protected override void OnModelCreating(ModelBuilder builder)
         {
@@ -47,6 +51,10 @@ namespace E7GEZLY_API.Data
             ConfigureGovernorate(builder);
             ConfigureDistrict(builder);
             ConfigureExternalLogin(builder);
+            ConfigureVenueWorkingHours(builder);
+            ConfigureVenuePricing(builder);
+            ConfigureVenueImage(builder);
+            ConfigureVenuePlayStationDetails(builder);
         }
 
         private void ConfigureApplicationUser(ModelBuilder builder)
@@ -241,6 +249,78 @@ namespace E7GEZLY_API.Data
                     .OnDelete(DeleteBehavior.Restrict);
 
                 entity.ToTable("Districts");
+            });
+        }
+
+        private void ConfigureVenueWorkingHours(ModelBuilder builder)
+        {
+            builder.Entity<VenueWorkingHours>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+
+                entity.HasOne(wh => wh.Venue)
+                    .WithMany(v => v.WorkingHours)
+                    .HasForeignKey(wh => wh.VenueId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasIndex(e => new { e.VenueId, e.DayOfWeek })
+                    .IsUnique();
+            });
+        }
+
+        private void ConfigureVenuePricing(ModelBuilder builder)
+        {
+            builder.Entity<VenuePricing>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+
+                entity.Property(e => e.Price)
+                    .HasPrecision(10, 2);
+
+                entity.Property(e => e.DepositPercentage)
+                    .HasPrecision(5, 2);
+
+                entity.HasOne(p => p.Venue)
+                    .WithMany(v => v.Pricing)
+                    .HasForeignKey(p => p.VenueId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasIndex(e => new { e.VenueId, e.Type });
+            });
+        }
+
+        private void ConfigureVenueImage(ModelBuilder builder)
+        {
+            builder.Entity<VenueImage>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+
+                entity.Property(e => e.ImageUrl)
+                    .IsRequired()
+                    .HasMaxLength(500);
+
+                entity.HasOne(i => i.Venue)
+                    .WithMany(v => v.Images)
+                    .HasForeignKey(i => i.VenueId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasIndex(e => new { e.VenueId, e.DisplayOrder });
+            });
+        }
+
+        private void ConfigureVenuePlayStationDetails(ModelBuilder builder)
+        {
+            builder.Entity<VenuePlayStationDetails>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+
+                entity.HasOne(d => d.Venue)
+                    .WithOne(v => v.PlayStationDetails)
+                    .HasForeignKey<VenuePlayStationDetails>(d => d.VenueId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasIndex(e => e.VenueId)
+                    .IsUnique();
             });
         }
     }

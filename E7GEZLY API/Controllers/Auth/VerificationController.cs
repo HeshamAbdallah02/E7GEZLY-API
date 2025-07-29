@@ -227,25 +227,44 @@ namespace E7GEZLY_API.Controllers.Auth
                     if (user.VenueId != null)
                     {
                         var venue = await _context.Venues.FindAsync(user.VenueId);
+
+                        var requiredActions = new List<string>();
+                        AuthMetadataDto? metadata = null;
+
+                        if (venue != null && !venue.IsProfileComplete)
+                        {
+                            requiredActions.Add("COMPLETE_PROFILE");
+                            metadata = new AuthMetadataDto(
+                                ProfileCompletionUrl: GetProfileCompletionUrl(venue.VenueType),
+                                NextStepDescription: "Complete your venue profile to start receiving bookings",
+                                AdditionalData: null
+                            );
+                        }
+
                         return Ok(new
                         {
-                            Success = true,
-                            Message = "Account verified successfully. Your venue is pending admin approval.",
-                            Tokens = tokens,
-                            VenueInfo = new
+                            success = true,
+                            message = "Account verified successfully",
+                            tokens,
+                            venueInfo = new
                             {
-                                VenueId = venue?.Id,
-                                VenueName = venue?.Name,
-                                //IsApproved = venue?.IsVerified ?? false
-                            }
+                                venueId = venue?.Id,
+                                venueName = venue?.Name,
+                                venueType = venue?.VenueType.ToString(),
+                                isProfileComplete = venue?.IsProfileComplete ?? false
+                            },
+                            requiredActions,
+                            metadata
                         });
                     }
 
+                    // Customer verification response
                     return Ok(new
                     {
-                        Success = true,
-                        Message = "Account verified successfully",
-                        Tokens = tokens
+                        success = true,
+                        message = "Account verified successfully",
+                        tokens,
+                        userType = "customer"
                     });
                 }
 
@@ -259,6 +278,17 @@ namespace E7GEZLY_API.Controllers.Auth
                 _logger.LogError(ex, "Error during account verification");
                 return StatusCode(500, new { message = "An error occurred during verification" });
             }
+        }
+
+        private string GetProfileCompletionUrl(VenueType venueType)
+        {
+            return venueType switch
+            {
+                VenueType.PlayStationVenue => "/api/venue/profile/complete/playstation",
+                VenueType.FootballCourt => "/api/venue/profile/complete/court",
+                VenueType.PadelCourt => "/api/venue/profile/complete/court",
+                _ => "/api/venue/profile/complete"
+            };
         }
 
         [HttpPost("send-email")]
@@ -333,9 +363,9 @@ namespace E7GEZLY_API.Controllers.Auth
                 {
                     return Ok(new
                     {
-                        success = response.success,
-                        message = response.message,
-                        expiresInMinutes = response.expiresInMinutes,
+                        response.success,
+                        response.message,
+                        response.expiresInMinutes,
                         verificationCode = code // Development only
                     });
                 }

@@ -35,14 +35,14 @@ namespace E7GEZLY_API.Extensions
                     policy.RequireRole("VenueAdmin"));
 
                 options.AddPolicy("DesktopAccess", policy =>
-                    policy.RequireRole("VenueAdmin")
-                          .RequireAssertion(context =>
-                          {
-                              var features = context.User.FindFirst("venueFeatures")?.Value;
-                              if (int.TryParse(features, out var f))
-                                  return (f & (int)VenueFeatures.DesktopAccess) != 0;
-                              return false;
-                          }));
+                   policy.RequireRole("VenueAdmin")
+                         .RequireAssertion(context =>
+                         {
+                             // Check if the venue type is PlayStation
+                             var venueTypeClaim = context.User.FindFirst("venueType")?.Value;
+                             return venueTypeClaim == VenueType.PlayStationVenue.ToString() ||
+                                    venueTypeClaim == ((int)VenueType.PlayStationVenue).ToString();
+                         }));
             });
 
             return services;

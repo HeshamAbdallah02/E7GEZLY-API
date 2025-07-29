@@ -361,3 +361,100 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+
+# Sensitive configuration files
+appsettings.Production.json
+appsettings.Development.json
+appsettings.Local.json
+*.secrets.json
+secrets.json
+.env
+.env.local
+.env.production
+.env.development
+
+# API Keys and tokens
+*.key
+*.token
+*.certificate
+*.cert
+*.pem
+*.p12
+*.pfx
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+localdb.mdf
+
+# Connection strings and sensitive configs
+connectionstrings.json
+*ConnectionStrings*
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Thumbnails
+._*
+
+# Files that might appear in the root of a volume
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+
+# Directories potentially created on remote AFP share
+.AppleDB
+.AppleDesktop
+Network Trash Folder
+Temporary Items
+.apdisk
+
+# Coverage reports
+coverage/
+*.coverage
+lcov.info
+coverage.xml
+coverage.json
+
+# Test results
+TestResults/
+*.trx
+*.xml
+
+# Backup files
+*.backup
+*.bak
+*.tmp
+
+# PowerShell scripts (potentially sensitive)
+*.ps1.secret
+
+# Batch files that might contain sensitive info
+*.bat.secret
+
+# Docker files with secrets
+docker-compose.override.yml
+.dockerignore.secret
+
+# Deployment files
+*.deploy
+*.deployment
+
+# Log files that might contain sensitive info
+*.sensitive.log
+audit.log
+security.log

@@ -3,6 +3,7 @@ using E7GEZLY_API.Models;
 using E7GEZLY_API.Services.Auth;
 using E7GEZLY_API.Services.Communication;
 using E7GEZLY_API.Services.Location;
+using E7GEZLY_API.Services.VenueManagement;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
@@ -26,6 +27,9 @@ namespace E7GEZLY_API.Extensions
             services.AddScoped<ITokenService, TokenService>();
             services.AddScoped<IVerificationService, VerificationService>();
             services.AddScoped<ILocationService, LocationService>();
+            services.AddScoped<IProfileService, ProfileService>();
+            services.AddScoped<IVenueProfileService, VenueProfileService>();
+
             // Add memory cache
             services.AddMemoryCache();
 
