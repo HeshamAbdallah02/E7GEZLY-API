@@ -81,6 +81,8 @@ namespace E7GEZLY_API.Extensions
 
             app.MapHealthChecks("/health");
 
+            app.UseRateLimiting();
+
             app.UseAuthentication();
             app.UseAuthorization();
 

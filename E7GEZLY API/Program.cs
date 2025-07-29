@@ -22,6 +22,7 @@ builder.Services.AddHealthCheckConfiguration();
 builder.Services.AddHostedService<SessionCleanupService>();
 builder.Services.AddCommunicationServices(builder.Configuration, builder.Environment);
 builder.Services.AddSocialAuthentication(builder.Configuration);
+builder.Services.AddRateLimiting(builder.Configuration);
 
 var app = builder.Build();
 
