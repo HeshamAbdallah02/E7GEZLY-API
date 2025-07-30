@@ -1,7 +1,12 @@
-﻿E7GEZLY API/
+E7GEZLY API/
+├── .github
+│   └── workflows
 ├── E7GEZLY API
 │   ├── Attributes
+│   │   ├── RateLimitAttribute.cs
 │   │   └── RequireCompleteProfileAttribute.cs
+│   ├── Configuration
+│   │   └── RateLimitConfiguration.cs
 │   ├── Controllers
 │   │   ├── Auth
 │   │   │   ├── AccountController.cs
@@ -17,6 +22,8 @@
 │   │   │   └── VenueProfileController.cs
 │   │   ├── LocationController.cs
 │   │   └── TestController.cs
+│   ├── Converters
+│   │   └── TimeSpanJsonConverter.cs
 │   ├── Data
 │   │   ├── AppDbContext.cs
 │   │   ├── DbInitializer.cs
@@ -52,6 +59,7 @@
 │   │   ├── CorsExtensions.cs
 │   │   ├── HealthChecksExtensions.cs
 │   │   ├── HttpContextExtensions.cs
+│   │   ├── RateLimitExtensions.cs
 │   │   ├── ServiceCollectionExtensions.cs
 │   │   ├── SocialAuthExtensions.cs
 │   │   ├── SwaggerExtensions.cs
@@ -59,7 +67,9 @@
 │   ├── HealthChecks
 │   │   └── NominatimHealthCheck.cs
 │   ├── Middleware
-│   │   └── GlobalExceptionMiddleware.cs
+│   │   ├── CustomRateLimitMiddleware.cs
+│   │   ├── GlobalExceptionMiddleware.cs
+│   │   └── UserRateLimitMiddleware.cs
 │   ├── Migrations
 │   │   ├── 20250722134948_InitialCreate.cs
 │   │   ├── 20250722134948_InitialCreate.Designer.cs
@@ -73,8 +83,6 @@
 │   │   ├── 20250726133303_AddExternalLoginsTable.Designer.cs
 │   │   ├── 20250728210408_AddVenueProfileCompletionEntities.cs
 │   │   ├── 20250728210408_AddVenueProfileCompletionEntities.Designer.cs
-│   │   ├── 20250729111213_UpdateVenueProfileCompletionEntities.cs
-│   │   ├── 20250729111213_UpdateVenueProfileCompletionEntities.Designer.cs
 │   │   └── AppDbContextModelSnapshot.cs
 │   ├── Models
 │   │   ├── ApplicationUser.cs
@@ -142,19 +150,6 @@
 │   │       └── TokenServiceIntegrationTests.cs
 │   ├── TestHelpers
 │   │   └── TestDataFactory.cs
-│   ├── TestResults
-│   │   ├── Deploy_20109 20250721T183159_23964
-│   │   │   ├── In
-│   │   │   │   └── LAPTOP-V8R4T203
-│   │   │   └── Out
-│   │   ├── Deploy_20109 20250729T142930_17452
-│   │   │   ├── In
-│   │   │   │   └── LAPTOP-V8R4T203
-│   │   │   └── Out
-│   │   └── Deploy_20109 20250729T150114_28588
-│   │       ├── In
-│   │       │   └── LAPTOP-V8R4T203
-│   │       └── Out
 │   ├── Unit
 │   │   └── Services
 │   │       ├── GeocodingServiceTests.cs
@@ -164,12 +159,6 @@
 │   │       └── VerificationServiceTests.cs
 │   ├── E7GEZLY_API.Tests.csproj
 │   └── testsettings.json
-├── TestResults
-│   ├── CoverageReport
-│   └── Deploy_20109 20250729T145937_21104
-│       ├── In
-│       │   └── LAPTOP-V8R4T203
-│       └── Out
 ├── .gitattributes
 ├── .gitignore
 ├── API-Documentation.md

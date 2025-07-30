@@ -10,5 +10,17 @@
     "UseRealNominatim": false,
     "MockResponsesPath": "Tests/MockData/",
     "NominatimTimeout": 5
+  },
+  "DistributedCache": {
+    "ConnectionString": "localhost:6379,abortConnect=false",
+    "InstanceName": "E7GEZLY_TEST",
+    "DefaultExpirationMinutes": 5,
+    "Features": {
+      "EnableLocationCache": false,
+      "EnableVenueCache": false,
+      "EnableSessionCache": false,
+      "EnableRateLimitCache": false,
+      "EnableGeocodingCache": false
+    }
   }
 }

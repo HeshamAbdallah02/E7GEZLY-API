@@ -1,8 +1,10 @@
 ﻿using E7GEZLY_API.Data;
 using E7GEZLY_API.DTOs.Auth;
 using E7GEZLY_API.Models;
+using E7GEZLY_API.Services.Caching;
 using E7GEZLY_API.Services.Communication;
 using E7GEZLY_API.Tests.Categories;
+using E7GEZLY_API.Tests.Mocks;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -13,6 +15,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Moq;
+using StackExchange.Redis;
 using System.Net;
 using System.Net.Http;
 using System.Text;
@@ -89,6 +92,11 @@ namespace E7GEZLY_API.Tests.Integration.Controllers
                             .ReturnsAsync(true);
 
                         services.AddSingleton(mockEmailService.Object);
+
+                        // Replace Redis cache with mock for tests
+                        services.RemoveAll<ICacheService>();
+                        services.RemoveAll<IConnectionMultiplexer>();
+                        services.AddSingleton<ICacheService>(new MockCacheService());
                     });
                 });
 

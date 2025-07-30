@@ -42,14 +42,10 @@ namespace E7GEZLY_API.Extensions
 
             // Register geocoding services with decoration pattern
             services.AddScoped<NominatimGeocodingService>();
-            services.AddScoped<IGeocodingService>(provider =>
-            {
-                var nominatimService = provider.GetRequiredService<NominatimGeocodingService>();
-                var cache = provider.GetRequiredService<IMemoryCache>();
-                var logger = provider.GetRequiredService<ILogger<CachedGeocodingService>>();
 
-                return new CachedGeocodingService(nominatimService, cache, logger);
-            });
+            // Note: The geocoding service will be decorated with distributed caching 
+            // after Redis is configured in AddDistributedCaching
+            services.AddScoped<IGeocodingService, NominatimGeocodingService>();
 
             services.AddHttpContextAccessor();
 

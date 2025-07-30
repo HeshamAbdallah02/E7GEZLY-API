@@ -1,66 +1,84 @@
-﻿// Services/Location/CachedGeocodingService.cs
+﻿using E7GEZLY_API.Configuration;
+using E7GEZLY_API.Services.Caching;
 using E7GEZLY_API.Services.Location;
-using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Options;
 
-public class CachedGeocodingService : IGeocodingService
+namespace E7GEZLY_API.Services.Location
 {
-    private readonly IGeocodingService _innerService;
-    private readonly IMemoryCache _cache;
-    private readonly ILogger<CachedGeocodingService> _logger;
-
-    public CachedGeocodingService(
-        IGeocodingService innerService,
-        IMemoryCache cache,
-        ILogger<CachedGeocodingService> logger)
+    public class CachedGeocodingService : IGeocodingService
     {
-        _innerService = innerService;
-        _cache = cache;
-        _logger = logger;
-    }
+        private readonly IGeocodingService _innerService;
+        private readonly ICacheService _cache;
+        private readonly CacheConfiguration _config;
+        private readonly ILogger<CachedGeocodingService> _logger;
 
-    public async Task<GeocodingResult?> GetAddressFromCoordinatesAsync(double latitude, double longitude)
-    {
-        var cacheKey = $"geocode_{latitude:F6}_{longitude:F6}";
-
-        if (_cache.TryGetValue<GeocodingResult>(cacheKey, out var cachedResult))
+        public CachedGeocodingService(
+            IGeocodingService innerService,
+            ICacheService cache,
+            IOptions<CacheConfiguration> config,
+            ILogger<CachedGeocodingService> logger)
         {
-            _logger.LogDebug($"Geocoding cache hit for {latitude}, {longitude}");
-            return cachedResult;
+            _innerService = innerService;
+            _cache = cache;
+            _config = config.Value;
+            _logger = logger;
         }
 
-        var result = await _innerService.GetAddressFromCoordinatesAsync(latitude, longitude);
-
-        if (result != null)
+        public async Task<GeocodingResult?> GetAddressFromCoordinatesAsync(double latitude, double longitude)
         {
-            _cache.Set(cacheKey, result, new MemoryCacheEntryOptions
+            if (!_config.Features.EnableGeocodingCache)
+                return await _innerService.GetAddressFromCoordinatesAsync(latitude, longitude);
+
+            var cacheKey = string.Format(CacheKeys.GeocodingResult, latitude.ToString("F6"), longitude.ToString("F6"));
+
+            var cached = await _cache.GetAsync<GeocodingResult>(cacheKey);
+            if (cached != null)
             {
-                AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(24),
-                SlidingExpiration = TimeSpan.FromHours(6)
-            });
-            _logger.LogDebug($"Cached geocoding result for {latitude}, {longitude}");
+                _logger.LogDebug("Geocoding cache hit for {Latitude}, {Longitude}", latitude, longitude);
+                return cached;
+            }
+
+            var result = await _innerService.GetAddressFromCoordinatesAsync(latitude, longitude);
+
+            if (result != null)
+            {
+                await _cache.SetAsync(
+                    cacheKey,
+                    result,
+                    TimeSpan.FromDays(_config.Durations.GeocodingResultDays)
+                );
+                _logger.LogDebug("Cached geocoding result for {Latitude}, {Longitude}", latitude, longitude);
+            }
+
+            return result;
         }
 
-        return result;
-    }
-
-    public async Task<int?> GetDistrictIdFromCoordinatesAsync(double latitude, double longitude)
-    {
-        var cacheKey = $"district_{latitude:F6}_{longitude:F6}";
-
-        if (_cache.TryGetValue<int?>(cacheKey, out var cachedDistrictId))
+        public async Task<int?> GetDistrictIdFromCoordinatesAsync(double latitude, double longitude)
         {
-            _logger.LogDebug($"District cache hit for {latitude}, {longitude}");
-            return cachedDistrictId;
+            var cacheKey = $"geocoding:district:{latitude:F6}:{longitude:F6}";
+
+            if (_config.Features.EnableGeocodingCache)
+            {
+                var cached = await _cache.GetAsync<int?>(cacheKey);
+                if (cached.HasValue)
+                {
+                    _logger.LogDebug("District cache hit for {Latitude}, {Longitude}", latitude, longitude);
+                    return cached;
+                }
+            }
+
+            var districtId = await _innerService.GetDistrictIdFromCoordinatesAsync(latitude, longitude);
+
+            if (_config.Features.EnableGeocodingCache && districtId.HasValue)
+            {
+                await _cache.SetAsync(
+                    cacheKey,
+                    districtId,
+                    TimeSpan.FromDays(_config.Durations.GeocodingResultDays)
+                );
+            }
+
+            return districtId;
         }
-
-        var districtId = await _innerService.GetDistrictIdFromCoordinatesAsync(latitude, longitude);
-
-        _cache.Set(cacheKey, districtId, new MemoryCacheEntryOptions
-        {
-            AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(24),
-            SlidingExpiration = TimeSpan.FromHours(6)
-        });
-
-        return districtId;
     }
 }

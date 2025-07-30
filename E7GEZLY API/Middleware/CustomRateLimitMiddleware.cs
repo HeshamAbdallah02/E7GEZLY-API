@@ -44,6 +44,13 @@ namespace E7GEZLY_API.Middleware
                     retrySeconds = seconds;
                 }
 
+                // Get user info for logging
+                var userId = context.User?.Identity?.Name;
+                var ip = context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+
+                // Log the rate limit event
+                LogRateLimitEvent(context, userId!, ip, retrySeconds);
+
                 // Create user-friendly response
                 var response = new
                 {
@@ -62,14 +69,24 @@ namespace E7GEZLY_API.Middleware
                 };
 
                 await context.Response.WriteAsJsonAsync(response);
-
-                // Log rate limit hit
-                var userId = context.User?.Identity?.Name;
-                var ip = context.Connection.RemoteIpAddress?.ToString();
-                _logger.LogWarning(
-                    "Rate limit exceeded for {UserId} from {IP} on {Endpoint}",
-                    userId ?? "anonymous", ip, context.Request.Path);
             }
+        }
+
+        private void LogRateLimitEvent(HttpContext context, string userId, string ip, long retrySeconds)
+        {
+            var eventData = new
+            {
+                Timestamp = DateTime.UtcNow,
+                UserId = userId ?? "anonymous",
+                IpAddress = ip,
+                Endpoint = context.Request.Path.Value,
+                Method = context.Request.Method,
+                UserAgent = context.Request.Headers["User-Agent"].FirstOrDefault(),
+                Language = context.Request.Headers["Accept-Language"].FirstOrDefault(),
+                RetryAfterSeconds = retrySeconds
+            };
+
+            _logger.LogWarning("Rate limit exceeded: {@RateLimitEvent}", eventData);
         }
     }
 }

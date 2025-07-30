@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
+using E7GEZLY_API.Attributes;
 
 namespace E7GEZLY_API.Controllers
 {
@@ -167,6 +168,49 @@ namespace E7GEZLY_API.Controllers
                 fromEmail = configuration["Email:FromEmail"],
                 fromName = configuration["Email:FromName"],
                 useMockService = configuration.GetValue<bool>("Email:UseMockService")
+            });
+        }
+
+        [HttpGet("ratelimit/general")]
+        public IActionResult TestGeneralRateLimit()
+        {
+            return Ok(new
+            {
+                message = "Request successful",
+                timestamp = DateTime.UtcNow,
+                endpoint = "general",
+                limit = "60 requests per minute"
+            });
+        }
+
+        [HttpGet("ratelimit/custom")]
+        [RateLimit(limit: 5, periodInSeconds: 60, message: "Custom endpoint limited to 5 requests per minute")]
+        public IActionResult TestCustomRateLimit()
+        {
+            return Ok(new
+            {
+                message = "Custom limit test successful",
+                timestamp = DateTime.UtcNow,
+                endpoint = "custom",
+                limit = "5 requests per minute"
+            });
+        }
+
+        [HttpGet("ratelimit/authenticated")]
+        [Authorize]
+        public IActionResult TestAuthenticatedRateLimit()
+        {
+            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            var role = User.FindFirst(ClaimTypes.Role)?.Value;
+
+            return Ok(new
+            {
+                message = "Authenticated request successful",
+                userId,
+                role,
+                timestamp = DateTime.UtcNow,
+                endpoint = "authenticated",
+                limit = role == "Customer" ? "100/minute" : "200/minute"
             });
         }
     }

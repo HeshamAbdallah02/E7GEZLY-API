@@ -1,8 +1,8 @@
-﻿// Extensions/HealthCheckExtensions.cs
-using E7GEZLY_API.Data;
+﻿using E7GEZLY_API.Data;
 using E7GEZLY_API.HealthChecks;
 using HealthChecks.UI.Client;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 
 namespace E7GEZLY_API.Extensions
 {
@@ -18,8 +18,18 @@ namespace E7GEZLY_API.Extensions
 
             // Add health checks
             services.AddHealthChecks()
-                .AddTypeActivatedCheck<NominatimHealthCheck>("nominatim")
-                .AddDbContextCheck<AppDbContext>("database");
+                .AddTypeActivatedCheck<NominatimHealthCheck>(
+                    name: "nominatim",
+                    failureStatus: HealthStatus.Degraded,
+                    tags: new[] { "external", "geocoding" })
+                .AddDbContextCheck<AppDbContext>(
+                    name: "database",
+                    failureStatus: HealthStatus.Unhealthy,
+                    tags: new[] { "db", "sql" })
+                .AddTypeActivatedCheck<RedisHealthCheck>(
+                    name: "redis",
+                    failureStatus: HealthStatus.Degraded,
+                    tags: new[] { "cache", "redis" });
 
             return services;
         }
@@ -28,6 +38,18 @@ namespace E7GEZLY_API.Extensions
         {
             app.MapHealthChecks("/health", new HealthCheckOptions
             {
+                ResponseWriter = UIResponseWriter.WriteHealthCheckUIResponse
+            });
+
+            app.MapHealthChecks("/health/ready", new HealthCheckOptions
+            {
+                Predicate = check => check.Tags.Contains("db") || check.Tags.Contains("cache"),
+                ResponseWriter = UIResponseWriter.WriteHealthCheckUIResponse
+            });
+
+            app.MapHealthChecks("/health/live", new HealthCheckOptions
+            {
+                Predicate = _ => false, // Only basic liveness check
                 ResponseWriter = UIResponseWriter.WriteHealthCheckUIResponse
             });
 

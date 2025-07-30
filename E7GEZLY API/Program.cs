@@ -23,6 +23,7 @@ builder.Services.AddHostedService<SessionCleanupService>();
 builder.Services.AddCommunicationServices(builder.Configuration, builder.Environment);
 builder.Services.AddSocialAuthentication(builder.Configuration);
 builder.Services.AddRateLimiting(builder.Configuration);
+builder.Services.AddDistributedCaching(builder.Configuration);
 
 var app = builder.Build();
 
@@ -37,6 +38,9 @@ app.UseMiddleware<GlobalExceptionMiddleware>();
 
 // Configure the HTTP request pipeline
 app.ConfigureMiddleware();
+
+// Warm up distributed cache
+app.UseDistributedCaching();
 
 app.Run();
 
