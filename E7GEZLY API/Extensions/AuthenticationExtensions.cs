@@ -43,6 +43,11 @@ namespace E7GEZLY_API.Extensions
                              return venueTypeClaim == VenueType.PlayStationVenue.ToString() ||
                                     venueTypeClaim == ((int)VenueType.PlayStationVenue).ToString();
                          }));
+                options.AddPolicy("VenueGateway", policy =>
+                    policy.RequireClaim("type", "venue-gateway"));
+
+                options.AddPolicy("VenueOperational", policy =>
+                    policy.RequireClaim("type", "venue-operational"));
             });
 
             return services;

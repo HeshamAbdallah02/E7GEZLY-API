@@ -4,6 +4,7 @@ using E7GEZLY_API.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace E7GEZLY_API.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20250731152119_AddVenueSubUserSystem")]
+    partial class AddVenueSubUserSystem
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -787,75 +790,6 @@ namespace E7GEZLY_API.Migrations
                     b.ToTable("VenueSubUsers");
                 });
 
-            modelBuilder.Entity("E7GEZLY_API.Models.VenueSubUserSession", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("datetime2")
-                        .HasDefaultValueSql("GETUTCDATE()");
-
-                    b.Property<string>("DeviceName")
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
-
-                    b.Property<string>("DeviceType")
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<string>("IpAddress")
-                        .HasMaxLength(45)
-                        .HasColumnType("nvarchar(45)");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("bit");
-
-                    b.Property<bool>("IsDeleted")
-                        .HasColumnType("bit");
-
-                    b.Property<DateTime>("LastActivityAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("datetime2")
-                        .HasDefaultValueSql("GETUTCDATE()");
-
-                    b.Property<string>("RefreshToken")
-                        .IsRequired()
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<DateTime>("RefreshTokenExpiry")
-                        .HasColumnType("datetime2");
-
-                    b.Property<Guid>("SubUserId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("datetime2")
-                        .HasDefaultValueSql("GETUTCDATE()");
-
-                    b.Property<string>("UserAgent")
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("RefreshToken")
-                        .IsUnique()
-                        .HasDatabaseName("IX_VenueSubUserSessions_RefreshToken");
-
-                    b.HasIndex("SubUserId")
-                        .HasDatabaseName("IX_VenueSubUserSessions_SubUserId");
-
-                    b.HasIndex("SubUserId", "IsActive")
-                        .HasDatabaseName("IX_VenueSubUserSessions_SubUserId_IsActive");
-
-                    b.ToTable("VenueSubUserSessions");
-                });
-
             modelBuilder.Entity("E7GEZLY_API.Models.VenueWorkingHours", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1199,17 +1133,6 @@ namespace E7GEZLY_API.Migrations
                     b.Navigation("CreatedBy");
 
                     b.Navigation("Venue");
-                });
-
-            modelBuilder.Entity("E7GEZLY_API.Models.VenueSubUserSession", b =>
-                {
-                    b.HasOne("E7GEZLY_API.Models.VenueSubUser", "SubUser")
-                        .WithMany()
-                        .HasForeignKey("SubUserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("SubUser");
                 });
 
             modelBuilder.Entity("E7GEZLY_API.Models.VenueWorkingHours", b =>

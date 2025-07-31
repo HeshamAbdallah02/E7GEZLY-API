@@ -1,3 +1,5 @@
+// Update your Program.cs - Add minimal cache service registration
+
 using E7GEZLY_API.Data;
 using E7GEZLY_API.Extensions;
 using E7GEZLY_API.Middleware;
@@ -10,20 +12,40 @@ builder.Logging.ClearProviders();
 builder.Logging.AddConsole();
 builder.Logging.AddDebug();
 
-// Add services to the container
+// IMPORTANT: Register services in the correct order to avoid dependency issues
+
+// 1. Core infrastructure services first
 builder.Services.AddDatabase(builder.Configuration);
 builder.Services.AddApplicationServices();
 builder.Services.AddIdentityServices();
+
+// 2. Add MINIMAL cache service registration (without decoration)
+builder.Services.AddMinimalCacheServices(builder.Configuration);
+
+// 3. Add venue sub-user services AFTER cache services
+builder.Services.AddVenueSubUserServices();
+
+// 4. Authentication and CORS
 builder.Services.AddJwtAuthentication(builder.Configuration, builder.Environment);
 builder.Services.AddCorsConfiguration(builder.Configuration);
-builder.Services.AddControllersWithOptions();
-builder.Services.AddSwaggerConfiguration();
-builder.Services.AddHealthCheckConfiguration();
-builder.Services.AddHostedService<SessionCleanupService>();
+
+// 5. Communication services
 builder.Services.AddCommunicationServices(builder.Configuration, builder.Environment);
 builder.Services.AddSocialAuthentication(builder.Configuration);
+
+// 6. Controllers and Swagger
+builder.Services.AddControllersWithOptions();
+builder.Services.AddSwaggerConfiguration();
+
+// 7. Health checks and background services
+builder.Services.AddHealthCheckConfiguration();
+builder.Services.AddHostedService<SessionCleanupService>();
+
+// 8. Rate limiting
 builder.Services.AddRateLimiting(builder.Configuration);
-builder.Services.AddDistributedCaching(builder.Configuration);
+
+// 9. FULL distributed caching is disabled for now
+// builder.Services.AddDistributedCaching(builder.Configuration);
 
 var app = builder.Build();
 
@@ -39,8 +61,8 @@ app.UseMiddleware<GlobalExceptionMiddleware>();
 // Configure the HTTP request pipeline
 app.ConfigureMiddleware();
 
-// Warm up distributed cache
-app.UseDistributedCaching();
+// Cache warm-up is disabled for now
+// app.UseDistributedCaching();
 
 app.Run();
 

@@ -1,7 +1,7 @@
 ﻿using E7GEZLY_API.Configuration;
 using E7GEZLY_API.DTOs.Location;
 using E7GEZLY_API.Models;
-using E7GEZLY_API.Services.Caching;
+using E7GEZLY_API.Services.Cache;
 using Microsoft.Extensions.Options;
 
 namespace E7GEZLY_API.Services.Location

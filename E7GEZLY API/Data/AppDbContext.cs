@@ -23,6 +23,9 @@ namespace E7GEZLY_API.Data
         public DbSet<VenuePricing> VenuePricing => Set<VenuePricing>();
         public DbSet<VenueImage> VenueImages => Set<VenueImage>();
         public DbSet<VenuePlayStationDetails> VenuePlayStationDetails => Set<VenuePlayStationDetails>();
+        public DbSet<VenueSubUser> VenueSubUsers => Set<VenueSubUser>();
+        public DbSet<VenueAuditLog> VenueAuditLogs => Set<VenueAuditLog>();
+        public DbSet<VenueSubUserSession> VenueSubUserSessions => Set<VenueSubUserSession>();
 
         protected override void OnModelCreating(ModelBuilder builder)
         {
@@ -55,6 +58,9 @@ namespace E7GEZLY_API.Data
             ConfigureVenuePricing(builder);
             ConfigureVenueImage(builder);
             ConfigureVenuePlayStationDetails(builder);
+            ConfigureVenueSubUser(builder);
+            ConfigureVenueAuditLog(builder);
+            ConfigureVenueSubUserSession(builder);
         }
 
         private void ConfigureApplicationUser(ModelBuilder builder)
@@ -321,6 +327,143 @@ namespace E7GEZLY_API.Data
 
                 entity.HasIndex(e => e.VenueId)
                     .IsUnique();
+            });
+        }
+
+        private void ConfigureVenueSubUser(ModelBuilder builder)
+        {
+            builder.Entity<VenueSubUser>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+
+                entity.Property(e => e.Username)
+                    .IsRequired()
+                    .HasMaxLength(50);
+
+                entity.Property(e => e.PasswordHash)
+                    .IsRequired()
+                    .HasMaxLength(500);
+
+                entity.Property(e => e.Role)
+                    .IsRequired()
+                    .HasConversion<int>();
+
+                entity.Property(e => e.Permissions)
+                    .IsRequired()
+                    .HasConversion<long>();
+
+                // Indexes
+                entity.HasIndex(e => new { e.VenueId, e.Username })
+                    .IsUnique()
+                    .HasDatabaseName("IX_VenueSubUsers_VenueId_Username");
+
+                entity.HasIndex(e => e.VenueId)
+                    .HasDatabaseName("IX_VenueSubUsers_VenueId");
+
+                // Relationships
+                entity.HasOne(e => e.Venue)
+                    .WithMany(v => v.SubUsers)
+                    .HasForeignKey(e => e.VenueId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasOne(e => e.CreatedBy)
+                    .WithMany()
+                    .HasForeignKey(e => e.CreatedBySubUserId)
+                    .OnDelete(DeleteBehavior.Restrict);
+            });
+        }
+
+        private void ConfigureVenueAuditLog(ModelBuilder builder)
+        {
+            builder.Entity<VenueAuditLog>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+
+                entity.Property(e => e.Action)
+                    .IsRequired()
+                    .HasMaxLength(100);
+
+                entity.Property(e => e.EntityType)
+                    .IsRequired()
+                    .HasMaxLength(100);
+
+                entity.Property(e => e.EntityId)
+                    .IsRequired()
+                    .HasMaxLength(100);
+
+                entity.Property(e => e.IpAddress)
+                    .HasMaxLength(45);
+
+                entity.Property(e => e.UserAgent)
+                    .HasMaxLength(500);
+
+                entity.Property(e => e.Timestamp)
+                    .HasDefaultValueSql("GETUTCDATE()");
+
+                // Indexes
+                entity.HasIndex(e => new { e.VenueId, e.Timestamp })
+                    .HasDatabaseName("IX_VenueAuditLogs_VenueId_Timestamp");
+
+                entity.HasIndex(e => e.SubUserId)
+                    .HasDatabaseName("IX_VenueAuditLogs_SubUserId");
+
+                // Relationships
+                entity.HasOne(e => e.Venue)
+                    .WithMany(v => v.AuditLogs)
+                    .HasForeignKey(e => e.VenueId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasOne(e => e.SubUser)
+                    .WithMany(su => su.AuditLogs)
+                    .HasForeignKey(e => e.SubUserId)
+                    .OnDelete(DeleteBehavior.Restrict);
+            });
+        }
+
+        private void ConfigureVenueSubUserSession(ModelBuilder builder)
+        {
+            builder.Entity<VenueSubUserSession>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+
+                entity.Property(e => e.RefreshToken)
+                    .IsRequired()
+                    .HasMaxLength(500);
+
+                entity.Property(e => e.DeviceName)
+                    .HasMaxLength(200);
+
+                entity.Property(e => e.DeviceType)
+                    .HasMaxLength(100);
+
+                entity.Property(e => e.IpAddress)
+                    .HasMaxLength(45);
+
+                entity.Property(e => e.UserAgent)
+                    .HasMaxLength(500);
+
+                entity.Property(e => e.RefreshTokenExpiry)
+                    .IsRequired();
+
+                entity.Property(e => e.LastActivityAt)
+                    .HasDefaultValueSql("GETUTCDATE()");
+
+                // Indexes for performance
+                entity.HasIndex(e => e.SubUserId)
+                    .HasDatabaseName("IX_VenueSubUserSessions_SubUserId");
+
+                entity.HasIndex(e => e.RefreshToken)
+                    .IsUnique()
+                    .HasDatabaseName("IX_VenueSubUserSessions_RefreshToken");
+
+                entity.HasIndex(e => new { e.SubUserId, e.IsActive })
+                    .HasDatabaseName("IX_VenueSubUserSessions_SubUserId_IsActive");
+
+                // Relationships
+                entity.HasOne(e => e.SubUser)
+                    .WithMany() // VenueSubUser doesn't need navigation property
+                    .HasForeignKey(e => e.SubUserId)
+                    .OnDelete(DeleteBehavior.Cascade);
             });
         }
     }

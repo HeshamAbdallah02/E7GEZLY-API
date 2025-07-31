@@ -1,4 +1,5 @@
-﻿namespace E7GEZLY_API.Extensions
+﻿// E7GEZLY API/Extensions/ServiceDecoratorExtensions.cs
+namespace E7GEZLY_API.Extensions
 {
     /// <summary>
     /// Extension methods for decorating services
@@ -21,16 +22,33 @@
 
             services.Remove(existingService);
 
-            var objectFactory = ActivatorUtilities.CreateFactory(
-                existingService.ImplementationType ?? typeof(TInterface),
-                new[] { typeof(IServiceProvider) });
-
+            // Create a new service descriptor that properly handles dependency injection
             services.Add(new ServiceDescriptor(
                 typeof(TInterface),
                 provider =>
                 {
-                    var instance = (TInterface)objectFactory(provider, null);
-                    return decorator(instance, provider);
+                    // Create the original service instance using the service provider
+                    TInterface originalInstance;
+
+                    if (existingService.ImplementationInstance != null)
+                    {
+                        originalInstance = (TInterface)existingService.ImplementationInstance;
+                    }
+                    else if (existingService.ImplementationFactory != null)
+                    {
+                        originalInstance = (TInterface)existingService.ImplementationFactory(provider);
+                    }
+                    else if (existingService.ImplementationType != null)
+                    {
+                        originalInstance = (TInterface)ActivatorUtilities.CreateInstance(provider, existingService.ImplementationType);
+                    }
+                    else
+                    {
+                        throw new InvalidOperationException($"Unable to create instance of {typeof(TInterface).Name}");
+                    }
+
+                    // Apply the decorator
+                    return decorator(originalInstance, provider);
                 },
                 existingService.Lifetime));
 

@@ -1,5 +1,5 @@
 ﻿using E7GEZLY_API.Configuration;
-using E7GEZLY_API.Services.Caching;
+using E7GEZLY_API.Services.Cache;
 using E7GEZLY_API.Services.Location;
 using Microsoft.Extensions.Options;
 

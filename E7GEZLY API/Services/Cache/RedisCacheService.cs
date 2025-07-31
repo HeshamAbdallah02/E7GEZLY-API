@@ -4,7 +4,7 @@ using Microsoft.Extensions.Options;
 using StackExchange.Redis;
 using System.Text.Json;
 
-namespace E7GEZLY_API.Services.Caching
+namespace E7GEZLY_API.Services.Cache
 {
     /// <summary>
     /// Redis implementation of distributed caching

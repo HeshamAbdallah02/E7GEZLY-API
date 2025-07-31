@@ -70,6 +70,10 @@ namespace E7GEZLY_API.Models
         public virtual ICollection<VenuePricing> Pricing { get; set; } = new List<VenuePricing>();
         public virtual ICollection<VenueImage> Images { get; set; } = new List<VenueImage>();
         public virtual VenuePlayStationDetails? PlayStationDetails { get; set; }
+
+        public bool RequiresSubUserSetup { get; set; } = false;
+        public virtual ICollection<VenueSubUser> SubUsers { get; set; } = new List<VenueSubUser>();
+        public virtual ICollection<VenueAuditLog> AuditLogs { get; set; } = new List<VenueAuditLog>();
     }
 
     public enum VenueType

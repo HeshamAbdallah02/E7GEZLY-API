@@ -1,15 +1,20 @@
-﻿using E7GEZLY_API.Data;
+﻿// E7GEZLY API/Extensions/ServiceCollectionExtensions.cs
+using E7GEZLY_API.Configuration;
+using E7GEZLY_API.Converters;
+using E7GEZLY_API.Data;
 using E7GEZLY_API.Models;
 using E7GEZLY_API.Services.Auth;
 using E7GEZLY_API.Services.Communication;
 using E7GEZLY_API.Services.Location;
 using E7GEZLY_API.Services.VenueManagement;
-using E7GEZLY_API.Converters;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
+using StackExchange.Redis;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using E7GEZLY_API.Services.Cache;
+using Microsoft.Extensions.Options;
 
 namespace E7GEZLY_API.Extensions
 {
@@ -61,6 +66,19 @@ namespace E7GEZLY_API.Extensions
             return services;
         }
 
+        // NEW: Add this method for venue sub-user services
+        public static IServiceCollection AddVenueSubUserServices(this IServiceCollection services)
+        {
+            // Register password hasher for VenueSubUser
+            services.AddScoped<IPasswordHasher<VenueSubUser>, PasswordHasher<VenueSubUser>>();
+
+            // Register venue sub-user services
+            services.AddScoped<IVenueSubUserService, VenueSubUserService>();
+            services.AddScoped<IVenueAuditService, VenueAuditService>();
+
+            return services;
+        }
+
         public static IServiceCollection AddControllersWithOptions(this IServiceCollection services)
         {
             services.AddControllers()
@@ -71,38 +89,82 @@ namespace E7GEZLY_API.Extensions
                     options.JsonSerializerOptions.Converters.Add(new TimeSpanJsonConverter());
                 });
 
-            services.AddEndpointsApiExplorer();
-            services.AddHealthChecks();
+            return services;
+        }
+
+        public static IServiceCollection AddCommunicationServices(this IServiceCollection services,
+            IConfiguration configuration, IWebHostEnvironment environment)
+        {
+            if (environment.IsDevelopment())
+            {
+                services.AddScoped<IEmailService, MockEmailService>();
+                services.AddScoped<ISmsService, MockSmsService>();
+            }
+            else
+            {
+                services.AddScoped<IEmailService, SendGridEmailService>();
+                services.AddScoped<ISmsService, MockSmsService>(); // Replace with real SMS service
+            }
 
             return services;
         }
-        public static IServiceCollection AddCommunicationServices(
-            this IServiceCollection services,
-            IConfiguration configuration,
-            IWebHostEnvironment environment)
+
+        public static IServiceCollection AddMinimalCacheServices(this IServiceCollection services, IConfiguration configuration)
         {
-            var useMockEmail = configuration.GetValue<bool>("Email:UseMockService");
-            var useMockSms = configuration.GetValue<bool>("Sms:UseMockService", true); // Default to true since SMS not implemented yet
+            // Add basic cache configuration
+            services.Configure<CacheConfiguration>(configuration.GetSection("DistributedCache"));
 
-            // Email Service
-            if (useMockEmail)
+            // Try to add Redis, but fallback to in-memory if Redis fails
+            try
             {
-                services.AddSingleton<IEmailService, MockEmailService>();
-            }
-            else
-            {
-                services.AddSingleton<IEmailService, SendGridEmailService>();
-            }
+                var cacheConfig = configuration.GetSection("DistributedCache").Get<CacheConfiguration>()
+                                 ?? new CacheConfiguration();
 
-            // SMS Service
-            if (environment.IsDevelopment() || useMockSms)
-            {
-                services.AddSingleton<ISmsService, MockSmsService>();
+                if (!string.IsNullOrEmpty(cacheConfig.ConnectionString) && cacheConfig.ConnectionString != "localhost:6379")
+                {
+                    // Only try Redis if connection string is explicitly configured and not default
+                    try
+                    {
+                        // Add Redis connection
+                        services.AddSingleton<IConnectionMultiplexer>(sp =>
+                        {
+                            var configOptions = ConfigurationOptions.Parse(cacheConfig.ConnectionString);
+                            configOptions.AbortOnConnectFail = false;
+                            configOptions.ConnectRetry = 3;
+                            configOptions.ConnectTimeout = 5000;
+
+                            return ConnectionMultiplexer.Connect(configOptions);
+                        });
+
+                        // Add Redis cache service
+                        services.AddSingleton<ICacheService, RedisCacheService>();
+
+                        // Log that Redis is being used
+                        var logger = services.BuildServiceProvider().GetService<ILogger<Program>>();
+                        logger?.LogInformation("Using Redis cache service");
+                    }
+                    catch
+                    {
+                        // If Redis setup fails, fallback to in-memory
+                        services.AddSingleton<ICacheService, InMemoryCacheService>();
+
+                        var logger = services.BuildServiceProvider().GetService<ILogger<Program>>();
+                        logger?.LogWarning("Redis setup failed, falling back to in-memory cache");
+                    }
+                }
+                else
+                {
+                    // Use in-memory cache by default
+                    services.AddSingleton<ICacheService, InMemoryCacheService>();
+
+                    var logger = services.BuildServiceProvider().GetService<ILogger<Program>>();
+                    logger?.LogInformation("Using in-memory cache service (development mode)");
+                }
             }
-            else
+            catch (Exception)
             {
-                // TODO: Implement real SMS service
-                services.AddSingleton<ISmsService, MockSmsService>(); // Using mock until real service is implemented
+                // If anything fails, use in-memory cache
+                services.AddSingleton<ICacheService, InMemoryCacheService>();
             }
 
             return services;

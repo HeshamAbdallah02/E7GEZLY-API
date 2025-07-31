@@ -6,6 +6,7 @@ E7GEZLY API/
 │   │   ├── RateLimitAttribute.cs
 │   │   └── RequireCompleteProfileAttribute.cs
 │   ├── Configuration
+│   │   ├── CacheConfiguration.cs
 │   │   └── RateLimitConfiguration.cs
 │   ├── Controllers
 │   │   ├── Auth
@@ -56,16 +57,19 @@ E7GEZLY API/
 │   │   └── GeocodingException.cs
 │   ├── Extensions
 │   │   ├── AuthenticationExtensions.cs
+│   │   ├── CacheExtensions.cs
 │   │   ├── CorsExtensions.cs
 │   │   ├── HealthChecksExtensions.cs
 │   │   ├── HttpContextExtensions.cs
 │   │   ├── RateLimitExtensions.cs
 │   │   ├── ServiceCollectionExtensions.cs
+│   │   ├── ServiceDecoratorExtensions.cs
 │   │   ├── SocialAuthExtensions.cs
 │   │   ├── SwaggerExtensions.cs
 │   │   └── WebApplicationExtensions.cs
 │   ├── HealthChecks
-│   │   └── NominatimHealthCheck.cs
+│   │   ├── NominatimHealthCheck.cs
+│   │   └── RedisHealthCheck.cs
 │   ├── Middleware
 │   │   ├── CustomRateLimitMiddleware.cs
 │   │   ├── GlobalExceptionMiddleware.cs
@@ -111,6 +115,10 @@ E7GEZLY API/
 │   │   │   └── VerificationService.cs
 │   │   ├── BackgroundServices
 │   │   │   └── SessionCleanupService.cs
+│   │   ├── Cache
+│   │   │   ├── DistributedRateLimitCounterStore.cs
+│   │   │   ├── ICacheService.cs
+│   │   │   └── RedisCacheService.cs
 │   │   ├── Communication
 │   │   │   ├── IEmailService.cs
 │   │   │   ├── ISmsService.cs
@@ -119,6 +127,7 @@ E7GEZLY API/
 │   │   │   └── SendGridEmailService.cs
 │   │   ├── Location
 │   │   │   ├── CachedGeocodingService.cs
+│   │   │   ├── CachedLocationService.cs
 │   │   │   ├── IGeocodingService.cs
 │   │   │   ├── ILocationService.cs
 │   │   │   ├── LocationService.cs
@@ -148,6 +157,8 @@ E7GEZLY API/
 │   │   │   └── VerificationControllerTests.cs
 │   │   └── Services
 │   │       └── TokenServiceIntegrationTests.cs
+│   ├── Mocks
+│   │   └── MockCacheService.cs
 │   ├── TestHelpers
 │   │   └── TestDataFactory.cs
 │   ├── Unit

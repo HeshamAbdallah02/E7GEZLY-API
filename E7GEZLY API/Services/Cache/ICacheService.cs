@@ -1,4 +1,4 @@
-﻿namespace E7GEZLY_API.Services.Caching
+﻿namespace E7GEZLY_API.Services.Cache
 {
     /// <summary>
     /// Distributed caching service interface

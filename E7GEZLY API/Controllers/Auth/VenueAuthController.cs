@@ -1,15 +1,22 @@
 ﻿// Controllers/Auth/VenueAuthController.cs
+using E7GEZLY_API.Attributes;
 using E7GEZLY_API.Data;
 using E7GEZLY_API.DTOs.Auth;
 using E7GEZLY_API.DTOs.Location;
-using E7GEZLY_API.Attributes;
+using E7GEZLY_API.DTOs.Venue;
 using E7GEZLY_API.Extensions;
 using E7GEZLY_API.Models;
 using E7GEZLY_API.Services.Auth;
 using E7GEZLY_API.Services.Location;
+using E7GEZLY_API.Services.VenueManagement;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
+using System.Text;
 
 namespace E7GEZLY_API.Controllers.Auth
 {
@@ -17,6 +24,8 @@ namespace E7GEZLY_API.Controllers.Auth
     [Route("api/auth/venue")]
     public class VenueAuthController : BaseAuthController
     {
+        private readonly IVenueSubUserService _subUserService;
+        private readonly IConfiguration _configuration;
         public VenueAuthController(
             UserManager<ApplicationUser> userManager,
             SignInManager<ApplicationUser> signInManager,
@@ -24,11 +33,15 @@ namespace E7GEZLY_API.Controllers.Auth
             IVerificationService verificationService,
             ILocationService locationService,
             IGeocodingService geocodingService,
+            IVenueSubUserService subUserService,
+            IConfiguration configuration,
             AppDbContext context,
             ILogger<VenueAuthController> logger,
             IWebHostEnvironment environment)
             : base(userManager, signInManager, tokenService, verificationService, locationService, geocodingService, context, logger, environment)
         {
+            _subUserService = subUserService;
+            _configuration = configuration;
         }
 
         [HttpPost("register")]
@@ -197,6 +210,9 @@ namespace E7GEZLY_API.Controllers.Auth
         }
 
 
+        /// <summary>
+        /// Login as venue (gateway only)
+        /// </summary>
         [HttpPost("login")]
         public async Task<IActionResult> Login([FromBody] LoginDto dto)
         {
@@ -244,7 +260,17 @@ namespace E7GEZLY_API.Controllers.Auth
 
                 _logger.LogInformation($"Venue logged in: {venue.Name}");
 
-                // Create session info
+                // Check if sub-user setup is required
+                var hasSubUsers = await _context.VenueSubUsers
+                    .AnyAsync(su => su.VenueId == venue.Id);
+
+                if (!hasSubUsers && venue.IsProfileComplete)
+                {
+                    venue.RequiresSubUserSetup = true;
+                    await _context.SaveChangesAsync();
+                }
+
+                // Create session info for gateway token
                 var sessionInfo = new CreateSessionDto(
                     DeviceName: HttpContext.GetDeviceName(),
                     DeviceType: HttpContext.DetectDeviceType(),
@@ -252,20 +278,20 @@ namespace E7GEZLY_API.Controllers.Auth
                     IpAddress: HttpContext.GetClientIpAddress()
                 );
 
-                var tokens = await _tokenService.GenerateTokensAsync(user, sessionInfo);
+                // Generate gateway token instead of regular tokens
+                var gatewayToken = GenerateVenueGatewayToken(venue.Id, user.Id);
 
                 // Determine required actions
                 var requiredActions = GetRequiredActions(user, venue);
                 var metadata = GetAuthMetadata(venue);
 
-                // Build the response
+                // Build the response for gateway login
                 var response = new
                 {
-                    // Token information
-                    accessToken = tokens.AccessToken,
-                    refreshToken = tokens.RefreshToken,
-                    accessTokenExpiry = tokens.AccessTokenExpiry,
-                    expiresAt = tokens.AccessTokenExpiry, // For backward compatibility
+                    // Gateway token information
+                    gatewayToken = gatewayToken,
+                    expiresAt = DateTime.UtcNow.AddHours(24), // Gateway tokens last longer
+                    requiresSubUserSetup = venue.RequiresSubUserSetup,
 
                     // User information
                     user = new UserAuthInfoDto(
@@ -295,7 +321,10 @@ namespace E7GEZLY_API.Controllers.Auth
 
                     // Actions and metadata
                     requiredActions,
-                    metadata
+                    metadata,
+
+                    // Instructions for next step
+                    nextStep = venue.RequiresSubUserSetup ? "create-first-admin" : "sub-user-login"
                 };
 
                 return Ok(response);
@@ -307,7 +336,71 @@ namespace E7GEZLY_API.Controllers.Auth
             }
         }
 
-        // Add these helper methods:
+        /// <summary>
+        /// Create first admin after profile completion
+        /// </summary>
+        [HttpPost("create-first-admin")]
+        [Authorize(Policy = "VenueGateway")]
+        public async Task<IActionResult> CreateFirstAdmin([FromBody] CreateVenueSubUserDto dto)
+        {
+            try
+            {
+                var venueId = User.GetVenueId();
+
+                // Verify no sub-users exist
+                var hasSubUsers = await _context.VenueSubUsers
+                    .AnyAsync(su => su.VenueId == venueId);
+
+                if (hasSubUsers)
+                {
+                    return BadRequest(new { message = "Sub-users already exist" });
+                }
+
+                // Force admin role and full permissions for first admin
+                var adminDto = dto with
+                {
+                    Role = VenueSubUserRole.Admin,
+                    Permissions = VenuePermissions.AdminPermissions
+                };
+
+                var subUser = await _subUserService.CreateSubUserAsync(
+                    venueId,
+                    null, // No creator for first admin
+                    adminDto);
+
+                // Mark as founder and update venue
+                var entity = await _context.VenueSubUsers.FindAsync(subUser.Id);
+                if (entity != null)
+                {
+                    entity.IsFounderAdmin = true;
+                    entity.MustChangePassword = false; // First admin doesn't need to change password immediately
+                }
+
+                var venue = await _context.Venues.FindAsync(venueId);
+                if (venue != null)
+                {
+                    venue.RequiresSubUserSetup = false;
+                }
+
+                await _context.SaveChangesAsync();
+
+                return Ok(new
+                {
+                    success = true,
+                    message = "First admin created successfully",
+                    subUser = subUser,
+                    nextStep = "sub-user-login"
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error creating first admin");
+                return StatusCode(500, new { message = "An error occurred while creating the first admin" });
+            }
+        }
+
+        // Helper methods:
+        #region Private Helper Methods
         private async Task<ApplicationUser?> FindUserByEmailOrPhoneAsync(string emailOrPhone)
         {
             ApplicationUser? user;
@@ -393,5 +486,32 @@ namespace E7GEZLY_API.Controllers.Auth
 
             return null;
         }
+
+        private string GenerateVenueGatewayToken(Guid venueId, string userId)
+        {
+            var claims = new List<Claim>
+    {
+        new Claim(JwtRegisteredClaimNames.Sub, userId),
+        new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
+        new Claim("venueId", venueId.ToString()),
+        new Claim("type", "venue-gateway")
+    };
+
+            var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["Jwt:Key"]!));
+            var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+            var expires = DateTime.UtcNow.AddHours(24); // Gateway tokens last longer
+
+            var token = new JwtSecurityToken(
+                issuer: _configuration["Jwt:Issuer"],
+                audience: _configuration["Jwt:Audience"],
+                claims: claims,
+                expires: expires,
+                signingCredentials: creds
+            );
+
+            return new JwtSecurityTokenHandler().WriteToken(token);
+        }
+
+        #endregion
     }
 }

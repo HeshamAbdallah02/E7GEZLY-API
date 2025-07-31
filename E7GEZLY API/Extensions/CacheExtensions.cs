@@ -1,6 +1,5 @@
 ﻿using E7GEZLY_API.Configuration;
 using E7GEZLY_API.Services.Cache;
-using E7GEZLY_API.Services.Caching;
 using E7GEZLY_API.Services.Location;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
@@ -47,7 +46,7 @@ namespace E7GEZLY_API.Extensions
 
         private static void DecorateServicesWithCaching(IServiceCollection services)
         {
-            // Decorate LocationService with caching
+/*            // Decorate LocationService with caching
             services.Decorate<ILocationService>((inner, provider) =>
             {
                 var cache = provider.GetRequiredService<ICacheService>();
@@ -65,7 +64,7 @@ namespace E7GEZLY_API.Extensions
                 var logger = provider.GetRequiredService<ILogger<CachedGeocodingService>>();
 
                 return new CachedGeocodingService(inner, cache, config, logger);
-            });
+            });*/
         }
 
         public static IApplicationBuilder UseDistributedCaching(this IApplicationBuilder app)

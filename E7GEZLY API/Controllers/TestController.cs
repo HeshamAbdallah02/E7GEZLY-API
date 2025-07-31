@@ -1,13 +1,15 @@
 ﻿// Controllers/TestController.cs
+using E7GEZLY_API.Attributes;
 using E7GEZLY_API.Data;
 using E7GEZLY_API.Models;
+using E7GEZLY_API.Services.Cache;
 using E7GEZLY_API.Services.Communication;
 using E7GEZLY_API.Services.Location;
+using E7GEZLY_API.Services.VenueManagement;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
-using E7GEZLY_API.Attributes;
 
 namespace E7GEZLY_API.Controllers
 {
@@ -212,6 +214,217 @@ namespace E7GEZLY_API.Controllers
                 endpoint = "authenticated",
                 limit = role == "Customer" ? "100/minute" : "200/minute"
             });
+        }
+
+        /// <summary>
+        /// Test venue sub-user system components
+        /// </summary>
+        [HttpGet("venue-subuser-system")]
+        public async Task<IActionResult> TestVenueSubUserSystem()
+        {
+            try
+            {
+                var checks = new Dictionary<string, object>();
+
+                // Check database tables exist
+                try
+                {
+                    // Check if VenueSubUsers table exists
+                    var venueSubUsersTableCheck = await _context.Database
+                        .SqlQueryRaw<int>("SELECT COUNT(*) as Value FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'VenueSubUsers'")
+                        .FirstOrDefaultAsync();
+                    var venueSubUsersExist = venueSubUsersTableCheck > 0;
+
+                    // Check if VenueAuditLogs table exists
+                    var auditLogsTableCheck = await _context.Database
+                        .SqlQueryRaw<int>("SELECT COUNT(*) as Value FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'VenueAuditLogs'")
+                        .FirstOrDefaultAsync();
+                    var auditLogsExist = auditLogsTableCheck > 0;
+
+                    // Check if RequiresSubUserSetup column exists in Venues table
+                    var venueColumnCheck = await _context.Database
+                        .SqlQueryRaw<int>("SELECT COUNT(*) as Value FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'Venues' AND COLUMN_NAME = 'RequiresSubUserSetup'")
+                        .FirstOrDefaultAsync();
+                    var venueColumnExists = venueColumnCheck > 0;
+
+                    checks["database_tables"] = new
+                    {
+                        venue_sub_users = venueSubUsersExist,
+                        venue_audit_logs = auditLogsExist,
+                        venue_column_updated = venueColumnExists
+                    };
+                }
+                catch (Exception ex)
+                {
+                    checks["database_tables"] = new { error = ex.Message };
+                }
+
+                // Check services are registered
+                var subUserService = HttpContext.RequestServices.GetService<IVenueSubUserService>();
+                var auditService = HttpContext.RequestServices.GetService<IVenueAuditService>();
+
+                // Try to get cache service (might be null if caching is disabled)
+                var cacheService = HttpContext.RequestServices.GetService<ICacheService>();
+
+                checks["services_registered"] = new
+                {
+                    venue_sub_user_service = subUserService != null,
+                    venue_audit_service = auditService != null,
+                    cache_service = cacheService != null,
+                    cache_note = cacheService == null ? "Caching temporarily disabled" : "Caching enabled"
+                };
+
+                // Check authorization service
+                var authService = HttpContext.RequestServices.GetService<IAuthorizationService>();
+                checks["authorization_service"] = authService != null;
+
+                // Check if test venue exists (corrected - venues don't have email, users do)
+                var testVenue = await _context.Venues
+                    .Include(v => v.User) // Include the associated ApplicationUser
+                    .Where(v => v.Name.Contains("Test") ||
+                               (v.User != null && v.User.Email != null && v.User.Email.Contains("test")))
+                    .FirstOrDefaultAsync();
+
+                checks["test_data"] = new
+                {
+                    test_venue_exists = testVenue != null,
+                    venue_id = testVenue?.Id,
+                    venue_name = testVenue?.Name,
+                    venue_user_email = testVenue?.User?.Email // Access email from User, not Venue
+                };
+
+                // Check venue sub-users count
+                var subUsersCount = 0;
+                try
+                {
+                    subUsersCount = await _context.VenueSubUsers.CountAsync();
+                }
+                catch (Exception ex)
+                {
+                    checks["sub_users_error"] = ex.Message;
+                }
+
+                // System status
+                var allTablesExist = false;
+                try
+                {
+                    var tableCheck = (dynamic)checks["database_tables"];
+                    if (tableCheck.GetType().GetProperty("venue_sub_users") != null)
+                    {
+                        allTablesExist = tableCheck.venue_sub_users && tableCheck.venue_audit_logs;
+                    }
+                }
+                catch
+                {
+                    allTablesExist = false;
+                }
+
+                checks["system_status"] = new
+                {
+                    timestamp = DateTime.UtcNow,
+                    environment = _environment.EnvironmentName,
+                    ready_for_testing = allTablesExist && subUserService != null && auditService != null,
+                    sub_users_count = subUsersCount,
+                    migration_needed = !allTablesExist
+                };
+
+                var nextSteps = new List<string>();
+
+                if (!allTablesExist)
+                {
+                    nextSteps.Add("1. Run migration: dotnet ef migrations add AddVenueSubUserSystem");
+                    nextSteps.Add("2. Update database: dotnet ef database update");
+                }
+                else
+                {
+                    nextSteps.Add("1. Create a test venue via registration");
+                    nextSteps.Add("2. Complete venue profile");
+                    nextSteps.Add("3. Test gateway login flow");
+                    nextSteps.Add("4. Create first admin");
+                    nextSteps.Add("5. Test sub-user login");
+                    nextSteps.Add("6. Test operational endpoints");
+                }
+
+                return Ok(new
+                {
+                    success = true,
+                    message = "Venue Sub-User System Verification",
+                    checks = checks,
+                    next_steps = nextSteps
+                });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new
+                {
+                    success = false,
+                    message = "System verification failed",
+                    error = ex.Message,
+                    stack_trace = _environment.IsDevelopment() ? ex.StackTrace : null
+                });
+            }
+        }
+
+        /// <summary>
+        /// Debug endpoint to see token claims
+        /// </summary>
+        [HttpGet("debug-token")]
+        [Authorize]
+        public IActionResult DebugToken()
+        {
+            var claims = User.Claims.Select(c => new
+            {
+                Type = c.Type,
+                Value = c.Value
+            }).ToList();
+
+            var analysis = new
+            {
+                IsAuthenticated = User.Identity?.IsAuthenticated ?? false,
+                AuthenticationType = User.Identity?.AuthenticationType,
+                TotalClaims = claims.Count,
+                Claims = claims,
+
+                // Specific claim analysis
+                TokenType = User.FindFirst("type")?.Value,
+                SubUserId = User.FindFirst("subUserId")?.Value,
+                SubUserRole = User.FindFirst("subUserRole")?.Value,
+                Permissions = User.FindFirst("permissions")?.Value,
+                VenueId = User.FindFirst("venueId")?.Value,
+
+                // Permission parsing test
+                PermissionsParsed = long.TryParse(User.FindFirst("permissions")?.Value, out var permValue)
+                    ? (VenuePermissions)permValue
+                    : VenuePermissions.None,
+
+                // Required permissions test
+                ViewSubUsersPermissionCheck = CheckPermission(VenuePermissions.ViewSubUsers),
+                CreateSubUsersPermissionCheck = CheckPermission(VenuePermissions.CreateSubUsers),
+                AdminPermissionsCheck = CheckPermission(VenuePermissions.AdminPermissions)
+            };
+
+            return Ok(analysis);
+        }
+
+        private object CheckPermission(VenuePermissions required)
+        {
+            var permissionsClaim = User.FindFirst("permissions")?.Value;
+            if (!long.TryParse(permissionsClaim, out var userPermissionsValue))
+            {
+                return new { HasPermission = false, Error = "Could not parse permissions" };
+            }
+
+            var userPermissions = (VenuePermissions)userPermissionsValue;
+            var hasPermission = (userPermissions & required) == required;
+
+            return new
+            {
+                HasPermission = hasPermission,
+                UserPermissions = userPermissions.ToString(),
+                UserPermissionsValue = userPermissionsValue,
+                RequiredPermissions = required.ToString(),
+                RequiredPermissionsValue = (long)required
+            };
         }
     }
 }

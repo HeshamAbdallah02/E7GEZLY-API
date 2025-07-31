@@ -1,6 +1,5 @@
 ﻿using AspNetCoreRateLimit;
 using E7GEZLY_API.Configuration;
-using E7GEZLY_API.Services.Caching;
 using Microsoft.Extensions.Options;
 
 namespace E7GEZLY_API.Services.Cache
