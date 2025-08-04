@@ -53,6 +53,7 @@ namespace E7GEZLY_API.Models
         public const string SubUserPasswordChanged = "SubUser.PasswordChanged";
         public const string SubUserPasswordReset = "SubUser.PasswordReset";
         public const string SubUserLogin = "SubUser.Login";
+        public const string SubUserLogout = "SubUser.Logout";
         public const string SubUserLoginFailed = "SubUser.LoginFailed";
 
         // Venue Management

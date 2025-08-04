@@ -2,6 +2,7 @@
 using E7GEZLY_API.Attributes;
 using E7GEZLY_API.Data;
 using E7GEZLY_API.Models;
+using E7GEZLY_API.Services.Auth;
 using E7GEZLY_API.Services.Cache;
 using E7GEZLY_API.Services.Communication;
 using E7GEZLY_API.Services.Location;
@@ -425,6 +426,342 @@ namespace E7GEZLY_API.Controllers
                 RequiredPermissions = required.ToString(),
                 RequiredPermissionsValue = (long)required
             };
+        }
+
+        /// <summary>
+        /// Test VenueOperational policy (should work with your token)
+        /// </summary>
+        [HttpGet("venue-operational-policy")]
+        [Authorize(Policy = "VenueOperational")]
+        public IActionResult TestVenueOperationalPolicy()
+        {
+            var tokenType = User.FindFirst("type")?.Value;
+            var venueId = User.FindFirst("venueId")?.Value;
+            var subUserId = User.FindFirst("subUserId")?.Value;
+            var permissions = User.FindFirst("permissions")?.Value;
+
+            return Ok(new
+            {
+                success = true,
+                message = "SUCCESS: VenueOperational policy test passed",
+                tokenInfo = new
+                {
+                    tokenType,
+                    venueId,
+                    subUserId,
+                    permissions,
+                    isOperationalToken = tokenType == "venue-operational"
+                },
+                timestamp = DateTime.UtcNow
+            });
+        }
+
+        /// <summary>
+        /// Test ViewSubUsers permission with VenueOperational policy
+        /// </summary>
+        [HttpGet("test-view-subusers-permission")]
+        [Authorize(Policy = "VenueOperational")]
+        [RequireVenuePermission(VenuePermissions.ViewSubUsers)]
+        public IActionResult TestViewSubUsersPermission()
+        {
+            var permissions = User.FindFirst("permissions")?.Value;
+            var tokenType = User.FindFirst("type")?.Value;
+            var venueId = User.FindFirst("venueId")?.Value;
+
+            return Ok(new
+            {
+                success = true,
+                message = "SUCCESS: ViewSubUsers permission test passed",
+                details = new
+                {
+                    tokenType,
+                    venueId,
+                    permissions,
+                    requiredPermission = VenuePermissions.ViewSubUsers.ToString(),
+                    requiredPermissionValue = (int)VenuePermissions.ViewSubUsers,
+                    note = "Both VenueOperational policy and ViewSubUsers permission checks passed"
+                },
+                timestamp = DateTime.UtcNow
+            });
+        }
+
+        /// <summary>
+        /// Simulate exact same setup as GetSubUsers endpoint
+        /// </summary>
+        [HttpGet("simulate-get-subusers/{venueId}")]
+        [Authorize(Policy = "VenueOperational")]
+        [RequireVenuePermission(VenuePermissions.ViewSubUsers)]
+        public IActionResult SimulateGetSubUsers(Guid venueId)
+        {
+            // Same venue validation as real endpoint
+            var tokenVenueId = User.FindFirst("venueId")?.Value;
+            if (tokenVenueId != venueId.ToString())
+            {
+                return Forbid("Access denied: Token venue ID does not match requested venue");
+            }
+
+            return Ok(new
+            {
+                success = true,
+                message = "SUCCESS: Simulation of GetSubUsers endpoint - all checks passed",
+                simulation = new
+                {
+                    endpointPattern = "/api/venues/{venueId}/subusers",
+                    authorizationPolicy = "VenueOperational",
+                    requiredPermission = VenuePermissions.ViewSubUsers.ToString(),
+                    venueIdValidation = "PASSED"
+                },
+                tokenInfo = new
+                {
+                    tokenVenueId,
+                    requestedVenueId = venueId.ToString(),
+                    venueIdMatch = tokenVenueId == venueId.ToString(),
+                    tokenType = User.FindFirst("type")?.Value,
+                    permissions = User.FindFirst("permissions")?.Value
+                },
+                timestamp = DateTime.UtcNow
+            });
+        }
+
+        /// <summary>
+        /// Test if token is valid and working (call before logout)
+        /// </summary>
+        [HttpGet("token-status")]
+        [Authorize(Policy = "VenueOperational")]
+        public IActionResult CheckTokenStatus()
+        {
+            var jti = User.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Jti)?.Value;
+            var subUserId = User.FindFirst("subUserId")?.Value;
+            var permissions = User.FindFirst("permissions")?.Value;
+            var tokenType = User.FindFirst("type")?.Value;
+
+            return Ok(new
+            {
+                success = true,
+                message = "✅ Token is VALID and working",
+                tokenInfo = new
+                {
+                    jti,
+                    subUserId,
+                    permissions,
+                    tokenType,
+                    isAuthenticated = User.Identity?.IsAuthenticated,
+                    timestamp = DateTime.UtcNow
+                },
+                note = "If you can see this response, your token is valid and not blacklisted"
+            });
+        }
+
+        /// <summary>
+        /// Test admin operation (should fail after logout)
+        /// </summary>
+        [HttpGet("test-admin-access")]
+        [Authorize(Policy = "VenueOperational")]
+        [RequireVenuePermission(VenuePermissions.CreateSubUsers)]
+        public IActionResult TestAdminAccess()
+        {
+            return Ok(new
+            {
+                success = true,
+                message = "✅ Admin access GRANTED",
+                operation = "CreateSubUsers permission test",
+                details = new
+                {
+                    subUserId = User.FindFirst("subUserId")?.Value,
+                    permissions = User.FindFirst("permissions")?.Value,
+                    jti = User.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Jti)?.Value
+                },
+                timestamp = DateTime.UtcNow,
+                warning = "⚠️ If you see this AFTER logout, then blacklisting is NOT working!"
+            });
+        }
+
+        /// <summary>
+        /// Verify logout worked by trying to access this endpoint after logout
+        /// </summary>
+        [HttpGet("verify-logout")]
+        [Authorize(Policy = "VenueOperational")]
+        public IActionResult VerifyLogout()
+        {
+            return Ok(new
+            {
+                success = false,
+                message = "❌ LOGOUT FAILED - Token is still valid",
+                problem = "Token blacklisting is not working properly",
+                tokenInfo = new
+                {
+                    jti = User.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Jti)?.Value,
+                    subUserId = User.FindFirst("subUserId")?.Value,
+                    isAuthenticated = User.Identity?.IsAuthenticated
+                },
+                troubleshooting = new
+                {
+                    step1 = "Check if TokenBlacklistMiddleware is registered in Program.cs",
+                    step2 = "Verify TokenBlacklistService is injected correctly",
+                    step3 = "Check Redis/cache service is working",
+                    step4 = "Look at logs for any blacklisting errors"
+                },
+                timestamp = DateTime.UtcNow
+            });
+        }
+
+        /// <summary>
+        /// Enhanced blacklist status check with cache debugging
+        /// </summary>
+        [HttpGet("blacklist-status/{tokenJti}")]
+        [AllowAnonymous]
+        public async Task<IActionResult> CheckBlacklistStatusDetailed(
+            string tokenJti,
+            [FromServices] ITokenBlacklistService blacklistService,
+            [FromServices] ICacheService cacheService)
+        {
+            try
+            {
+                // Check blacklist status
+                var isBlacklisted = await blacklistService.IsTokenBlacklistedAsync(tokenJti);
+
+                // Try to check cache directly
+                var cacheKey = $"blacklisted_token:{tokenJti}";
+                object? cacheValue = null;
+                var cacheError = "";
+
+                try
+                {
+                    cacheValue = await cacheService.GetAsync<bool?>(cacheKey);
+                }
+                catch (Exception ex)
+                {
+                    cacheError = ex.Message;
+                }
+
+                return Ok(new
+                {
+                    tokenJti,
+                    isBlacklisted,
+                    status = isBlacklisted ? "🚫 BLACKLISTED" : "✅ NOT BLACKLISTED",
+                    cacheDetails = new
+                    {
+                        cacheKey,
+                        cacheValue,
+                        cacheError = string.IsNullOrEmpty(cacheError) ? null : cacheError,
+                        cacheServiceType = cacheService.GetType().Name
+                    },
+                    timestamp = DateTime.UtcNow
+                });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new
+                {
+                    tokenJti,
+                    error = "Failed to check blacklist status",
+                    message = ex.Message,
+                    timestamp = DateTime.UtcNow
+                });
+            }
+        }
+
+        /// <summary>
+        /// Debug endpoint to check cache service status
+        /// </summary>
+        [HttpGet("cache-status")]
+        [AllowAnonymous]
+        public async Task<IActionResult> CheckCacheStatus([FromServices] ICacheService cacheService)
+        {
+            try
+            {
+                // Test cache with a simple operation
+                var testKey = "test_cache_key";
+                var testValue = "test_value";
+
+                await cacheService.SetAsync(testKey, testValue, TimeSpan.FromMinutes(1));
+                var retrievedValue = await cacheService.GetAsync<string>(testKey);
+
+                var cacheWorking = retrievedValue == testValue;
+
+                return Ok(new
+                {
+                    cacheServiceType = cacheService.GetType().Name,
+                    isWorking = cacheWorking,
+                    testResult = cacheWorking ? "✅ CACHE WORKING" : "❌ CACHE FAILED",
+                    retrievedValue,
+                    expectedValue = testValue,
+                    timestamp = DateTime.UtcNow
+                });
+            }
+            catch (Exception ex)
+            {
+                return Ok(new
+                {
+                    cacheServiceType = cacheService?.GetType().Name ?? "NULL",
+                    isWorking = false,
+                    testResult = "❌ CACHE ERROR",
+                    error = ex.Message,
+                    timestamp = DateTime.UtcNow
+                });
+            }
+        }
+
+        /// <summary>
+        /// Manual blacklist test - blacklist a specific token
+        /// </summary>
+        [HttpPost("test-blacklist/{tokenJti}")]
+        [AllowAnonymous]
+        public async Task<IActionResult> TestBlacklistToken(
+            string tokenJti,
+            [FromServices] ITokenBlacklistService blacklistService)
+        {
+            try
+            {
+                await blacklistService.BlacklistTokenAsync(tokenJti, DateTime.UtcNow.AddHours(4));
+
+                // Immediately check if it was blacklisted
+                var isBlacklisted = await blacklistService.IsTokenBlacklistedAsync(tokenJti);
+
+                return Ok(new
+                {
+                    success = true,
+                    message = "Blacklist test completed",
+                    tokenJti,
+                    blacklistAttempt = "✅ SUCCESS",
+                    verificationCheck = isBlacklisted ? "✅ CONFIRMED BLACKLISTED" : "❌ NOT BLACKLISTED",
+                    isBlacklisted,
+                    timestamp = DateTime.UtcNow
+                });
+            }
+            catch (Exception ex)
+            {
+                return Ok(new
+                {
+                    success = false,
+                    message = "Blacklist test failed",
+                    tokenJti,
+                    blacklistAttempt = "❌ FAILED",
+                    error = ex.Message,
+                    timestamp = DateTime.UtcNow
+                });
+            }
+        }
+
+        /// <summary>
+        /// Get current token's JTI for testing
+        /// </summary>
+        [HttpGet("my-token-jti")]
+        [Authorize(Policy = "VenueOperational")]
+        public IActionResult GetMyTokenJti()
+        {
+            var jti = User.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Jti)?.Value;
+            var subUserId = User.FindFirst("subUserId")?.Value;
+
+            return Ok(new
+            {
+                jti,
+                subUserId,
+                message = "Use this JTI for manual blacklist testing",
+                testUrl = $"/api/test/test-blacklist/{jti}",
+                checkUrl = $"/api/test/blacklist-status/{jti}",
+                timestamp = DateTime.UtcNow
+            });
         }
     }
 }

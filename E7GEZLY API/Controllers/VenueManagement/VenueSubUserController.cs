@@ -14,7 +14,7 @@ namespace E7GEZLY_API.Controllers.VenueManagement
     /// </summary>
     [ApiController]
     [Route("api/venues/{venueId}/subusers")]
-    [Authorize(Policy = "VenueGateway")]
+    [Authorize(Policy = "VenueOperational")]
     public class VenueSubUserController : ControllerBase
     {
         private readonly IVenueSubUserService _subUserService;

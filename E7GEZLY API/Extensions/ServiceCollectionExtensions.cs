@@ -76,6 +76,9 @@ namespace E7GEZLY_API.Extensions
             services.AddScoped<IVenueSubUserService, VenueSubUserService>();
             services.AddScoped<IVenueAuditService, VenueAuditService>();
 
+            // Register venue sub-user token invalidation after logout
+            services.AddScoped<ITokenBlacklistService, TokenBlacklistService>();
+
             return services;
         }
 

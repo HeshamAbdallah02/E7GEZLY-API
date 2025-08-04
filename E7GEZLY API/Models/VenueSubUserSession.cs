@@ -33,5 +33,12 @@ namespace E7GEZLY_API.Models
         public bool IsActive { get; set; } = true;
 
         public DateTime LastActivityAt { get; set; } = DateTime.UtcNow;
+
+        /// <summary>
+        /// JWT ID (jti claim) for token blacklisting when user logs out
+        /// This allows us to invalidate specific access tokens immediately
+        /// </summary>
+        [StringLength(50)]
+        public string? AccessTokenJti { get; set; }
     }
 }

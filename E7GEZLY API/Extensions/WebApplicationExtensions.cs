@@ -1,4 +1,5 @@
 ﻿using E7GEZLY_API.Data;
+using E7GEZLY_API.Middleware;
 using Microsoft.EntityFrameworkCore;
 using System.Text.Json;
 
@@ -84,6 +85,9 @@ namespace E7GEZLY_API.Extensions
             app.UseRateLimiting();
 
             app.UseAuthentication();
+
+            app.UseTokenBlacklist();
+
             app.UseAuthorization();
 
             app.UseGlobalErrorHandler();

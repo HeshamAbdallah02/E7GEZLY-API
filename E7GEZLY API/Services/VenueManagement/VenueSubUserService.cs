@@ -27,6 +27,7 @@ namespace E7GEZLY_API.Services.VenueManagement
         private readonly ICacheService _cache;
         private readonly IConfiguration _configuration;
         private readonly ILogger<VenueSubUserService> _logger;
+        private readonly ITokenBlacklistService _tokenBlacklistService;
 
         public VenueSubUserService(
             AppDbContext context,
@@ -34,7 +35,8 @@ namespace E7GEZLY_API.Services.VenueManagement
             IVenueAuditService auditService,
             ICacheService cache,
             IConfiguration configuration,
-            ILogger<VenueSubUserService> logger)
+            ILogger<VenueSubUserService> logger,
+            ITokenBlacklistService tokenBlacklistService)
         {
             _context = context;
             _passwordHasher = passwordHasher;
@@ -42,6 +44,7 @@ namespace E7GEZLY_API.Services.VenueManagement
             _cache = cache;
             _configuration = configuration;
             _logger = logger;
+            _tokenBlacklistService = tokenBlacklistService;
         }
 
         public async Task<VenueSubUserLoginResponseDto> AuthenticateSubUserAsync(
@@ -55,58 +58,27 @@ namespace E7GEZLY_API.Services.VenueManagement
 
             if (subUser == null)
             {
-                await _auditService.LogActionAsync(new CreateAuditLogDto(
-                    venueId,
-                    null,
-                    VenueAuditActions.SubUserLoginFailed,
-                    "VenueSubUser",
-                    dto.Username,
-                    AdditionalData: new { Reason = "UserNotFound" }
-                ));
+                throw new UnauthorizedAccessException("Invalid credentials");
+            }
 
-                throw new UnauthorizedAccessException("Invalid username or password");
+            // Verify password
+            var result = _passwordHasher.VerifyHashedPassword(subUser, subUser.PasswordHash, dto.Password);
+            if (result == PasswordVerificationResult.Failed)
+            {
+                // Increment failed attempts
+                subUser.FailedLoginAttempts++;
+                if (subUser.FailedLoginAttempts >= 5)
+                {
+                    subUser.LockoutEnd = DateTime.UtcNow.AddMinutes(15);
+                }
+                await _context.SaveChangesAsync();
+                throw new UnauthorizedAccessException("Invalid credentials");
             }
 
             // Check lockout
             if (subUser.LockoutEnd.HasValue && subUser.LockoutEnd > DateTime.UtcNow)
             {
-                throw new UnauthorizedAccessException(
-                    $"Account locked until {subUser.LockoutEnd:yyyy-MM-dd HH:mm} UTC");
-            }
-
-            // Verify password
-            var result = _passwordHasher.VerifyHashedPassword(
-                subUser,
-                subUser.PasswordHash,
-                dto.Password);
-
-            if (result == PasswordVerificationResult.Failed)
-            {
-                // Increment failed attempts
-                subUser.FailedLoginAttempts++;
-
-                // Lock account after 5 failed attempts
-                if (subUser.FailedLoginAttempts >= 5)
-                {
-                    subUser.LockoutEnd = DateTime.UtcNow.AddMinutes(30);
-                }
-
-                await _context.SaveChangesAsync();
-
-                await _auditService.LogActionAsync(new CreateAuditLogDto(
-                    venueId,
-                    subUser.Id,
-                    VenueAuditActions.SubUserLoginFailed,
-                    "VenueSubUser",
-                    subUser.Id.ToString(),
-                    AdditionalData: new
-                    {
-                        Reason = "InvalidPassword",
-                        FailedAttempts = subUser.FailedLoginAttempts
-                    }
-                ));
-
-                throw new UnauthorizedAccessException("Invalid username or password");
+                throw new UnauthorizedAccessException("Account is temporarily locked");
             }
 
             // Check if active
@@ -122,8 +94,11 @@ namespace E7GEZLY_API.Services.VenueManagement
 
             await _context.SaveChangesAsync();
 
+            // Generate unique JTI for this token
+            var jti = Guid.NewGuid().ToString();
+
             // Generate tokens using custom method for sub-users
-            var accessToken = GenerateSubUserAccessToken(subUser, venueId);
+            var accessToken = GenerateSubUserAccessToken(subUser, venueId, jti);
             var refreshToken = GenerateRefreshToken();
 
             var session = new VenueSubUserSession
@@ -134,7 +109,8 @@ namespace E7GEZLY_API.Services.VenueManagement
                 DeviceName = "Sub-User Session",
                 DeviceType = "Unknown",
                 IsActive = true,
-                LastActivityAt = DateTime.UtcNow
+                LastActivityAt = DateTime.UtcNow,
+                AccessTokenJti = jti // ← STORE THE JTI
             };
 
             _context.VenueSubUserSessions.Add(session);
@@ -163,7 +139,6 @@ namespace E7GEZLY_API.Services.VenueManagement
                 subUser.MustChangePassword
             );
         }
-
         public async Task<VenueSubUserResponseDto> CreateSubUserAsync(
             Guid venueId,
             Guid? createdBySubUserId,
@@ -439,21 +414,104 @@ namespace E7GEZLY_API.Services.VenueManagement
 
         public async Task LogoutAsync(Guid subUserId)
         {
-            // Clear cache
-            await _cache.RemoveByPatternAsync($"venue:*:subuser:{subUserId}:*");
+            _logger.LogInformation("🔄 Starting logout process for sub-user {SubUserId}", subUserId);
 
-            // Deactivate venue sub-user sessions
-            var sessions = await _context.VenueSubUserSessions
-                .Where(s => s.SubUserId == subUserId && s.IsActive)
-                .ToListAsync();
-
-            foreach (var session in sessions)
+            try
             {
-                session.IsActive = false;
-                session.UpdatedAt = DateTime.UtcNow;
-            }
+                // Get all active sessions for the sub-user
+                var activeSessions = await _context.VenueSubUserSessions
+                    .Where(s => s.SubUserId == subUserId && s.IsActive)
+                    .ToListAsync();
 
-            await _context.SaveChangesAsync();
+                _logger.LogInformation("Found {SessionCount} active sessions for sub-user {SubUserId}",
+                    activeSessions.Count, subUserId);
+
+                if (activeSessions.Any())
+                {
+                    // First, try to blacklist all access tokens
+                    var tokensToBlacklist = activeSessions
+                        .Where(s => !string.IsNullOrEmpty(s.AccessTokenJti))
+                        .ToList();
+
+                    _logger.LogInformation("Attempting to blacklist {TokenCount} tokens", tokensToBlacklist.Count);
+
+                    foreach (var session in tokensToBlacklist)
+                    {
+                        try
+                        {
+                            await _tokenBlacklistService.BlacklistTokenAsync(
+                                session.AccessTokenJti!,
+                                DateTime.UtcNow.AddHours(4));
+
+                            _logger.LogDebug("✅ Blacklisted token with JTI: {JTI}", session.AccessTokenJti);
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogError(ex, "❌ Failed to blacklist token with JTI: {JTI}", session.AccessTokenJti);
+                        }
+                    }
+
+                    // Deactivate all sessions in database (this should always work)
+                    foreach (var session in activeSessions)
+                    {
+                        session.IsActive = false;
+                        session.UpdatedAt = DateTime.UtcNow;
+                    }
+
+                    await _context.SaveChangesAsync();
+                    _logger.LogInformation("✅ Deactivated {SessionCount} sessions in database", activeSessions.Count);
+
+                    // Try to clear cache (this might fail but shouldn't prevent logout)
+                    try
+                    {
+                        await _cache.RemoveByPatternAsync($"venue:*:subuser:{subUserId}:*");
+                        _logger.LogDebug("✅ Cleared cache for sub-user {SubUserId}", subUserId);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "❌ Failed to clear cache for sub-user {SubUserId} (non-critical)", subUserId);
+                    }
+
+                    // Log audit (this should always work)
+                    try
+                    {
+                        var venueId = activeSessions.First().SubUser?.VenueId ??
+                                     (await _context.VenueSubUsers.AsNoTracking()
+                                         .Where(u => u.Id == subUserId)
+                                         .Select(u => u.VenueId)
+                                         .FirstOrDefaultAsync());
+
+                        if (venueId != Guid.Empty)
+                        {
+                            await _auditService.LogActionAsync(new CreateAuditLogDto(
+                                venueId,
+                                subUserId,
+                                VenueAuditActions.SubUserLogout,
+                                "VenueSubUser",
+                                subUserId.ToString()
+                            ));
+                            _logger.LogDebug("✅ Logged audit for logout");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "❌ Failed to log audit for logout (non-critical)");
+                    }
+
+                    _logger.LogInformation("🎯 LOGOUT COMPLETED for sub-user {SubUserId}. " +
+                        "Tokens blacklisted: {TokenCount}, Sessions deactivated: {SessionCount}",
+                        subUserId, tokensToBlacklist.Count, activeSessions.Count);
+                }
+                else
+                {
+                    _logger.LogWarning("⚠️ No active sessions found for sub-user {SubUserId}", subUserId);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "❌ CRITICAL ERROR during logout for sub-user {SubUserId}", subUserId);
+                throw;
+            }
         }
 
         #region Private Methods
@@ -497,12 +555,12 @@ namespace E7GEZLY_API.Services.VenueManagement
             };
         }
 
-        private string GenerateSubUserAccessToken(VenueSubUser subUser, Guid venueId)
+        private string GenerateSubUserAccessToken(VenueSubUser subUser, Guid venueId, string jti)
         {
             var claims = new List<Claim>
             {
                 new Claim(JwtRegisteredClaimNames.Sub, subUser.Id.ToString()),
-                new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
+                new Claim(JwtRegisteredClaimNames.Jti, jti), // ← This is the key change
                 new Claim("venueId", venueId.ToString()),
                 new Claim("subUserId", subUser.Id.ToString()),
                 new Claim("subUserRole", subUser.Role.ToString()),
