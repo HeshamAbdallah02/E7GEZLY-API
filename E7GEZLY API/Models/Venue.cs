@@ -1,5 +1,6 @@
 ﻿// Models/Venue.cs
 using System.ComponentModel.DataAnnotations;
+using E7GEZLY_API.Domain.Enums;
 
 namespace E7GEZLY_API.Models
 {
@@ -38,6 +39,25 @@ namespace E7GEZLY_API.Models
         [StringLength(200)]
         public string? Landmark { get; set; }
 
+        // Contact and social media properties
+        [StringLength(20)]
+        public string? PhoneNumber { get; set; }
+        
+        [StringLength(20)]
+        public string? WhatsAppNumber { get; set; }
+        
+        [StringLength(500)]
+        public string? FacebookUrl { get; set; }
+        
+        [StringLength(500)]
+        public string? InstagramUrl { get; set; }
+        
+        [StringLength(1000)]
+        public string? Description { get; set; }
+        
+        // Status field
+        public bool IsActive { get; set; } = true;
+
         // Computed property for full address
         public string FullAddress
         {
@@ -53,6 +73,11 @@ namespace E7GEZLY_API.Models
                 return string.Join(", ", parts);
             }
         }
+        
+        // Computed properties for backward compatibility
+        public string? City => District?.NameEn;
+        public string? Governorate => District?.Governorate?.NameEn;
+        public string? Address => StreetAddress;
 
         // Status
         /*public bool IsVerified { get; set; } = false;
@@ -74,19 +99,5 @@ namespace E7GEZLY_API.Models
         public bool RequiresSubUserSetup { get; set; } = false;
         public virtual ICollection<VenueSubUser> SubUsers { get; set; } = new List<VenueSubUser>();
         public virtual ICollection<VenueAuditLog> AuditLogs { get; set; } = new List<VenueAuditLog>();
-    }
-
-    public enum VenueType
-    {
-        PlayStationVenue = 0,
-        FootballCourt = 1,
-        PadelCourt = 2,
-        MultiPurpose = 99
-    }
-
-    [Flags]
-    public enum VenueFeatures
-    {
-        // features would go here
     }
 }

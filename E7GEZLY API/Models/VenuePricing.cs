@@ -1,6 +1,7 @@
 ﻿// Models/VenuePricing.cs
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using E7GEZLY_API.Domain.Enums;
 
 namespace E7GEZLY_API.Models
 {
@@ -33,39 +34,22 @@ namespace E7GEZLY_API.Models
 
         [Column(TypeName = "decimal(5,2)")]
         public decimal? DepositPercentage { get; set; }
-    }
-
-    public enum PricingType
-    {
-        // Court pricing
-        MorningHour = 0,
-        EveningHour = 1,
-
-        // PlayStation pricing
-        PlayStation = 10
-    }
-
-    public enum PlayStationModel
-    {
-        PS4 = 4,
-        PS5 = 5
-    }
-
-    public enum RoomType
-    {
-        Classic = 0,
-        VIP = 1
-    }
-
-    public enum GameMode
-    {
-        Single = 0,
-        Multiplayer = 1
-    }
-
-    public enum TimeSlotType
-    {
-        Morning = 0,
-        Evening = 1
+        
+        // Handler compatibility properties
+        public bool IsActive { get; set; } = true;
+        public string Name => GenerateName();
+        public decimal PricePerHour => Price;
+        
+        private string GenerateName()
+        {
+            var nameParts = new List<string> { Type.ToString() };
+            
+            if (PlayStationModel.HasValue) nameParts.Add($"PS{(int)PlayStationModel.Value}");
+            if (RoomType.HasValue) nameParts.Add(RoomType.Value.ToString());
+            if (GameMode.HasValue) nameParts.Add(GameMode.Value.ToString());
+            if (TimeSlotType.HasValue) nameParts.Add(TimeSlotType.Value.ToString());
+            
+            return string.Join(" - ", nameParts);
+        }
     }
 }

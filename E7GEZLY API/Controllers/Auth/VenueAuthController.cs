@@ -1,6 +1,7 @@
 ﻿// Controllers/Auth/VenueAuthController.cs
 using E7GEZLY_API.Attributes;
 using E7GEZLY_API.Data;
+using E7GEZLY_API.Domain.Enums;
 using E7GEZLY_API.DTOs.Auth;
 using E7GEZLY_API.DTOs.Location;
 using E7GEZLY_API.DTOs.Venue;

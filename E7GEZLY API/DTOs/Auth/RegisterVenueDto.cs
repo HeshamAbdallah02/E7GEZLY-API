@@ -1,6 +1,6 @@
 ﻿// DTOs/Auth/RegisterVenueDto.cs
 using System.ComponentModel.DataAnnotations;
-using E7GEZLY_API.Models;
+using E7GEZLY_API.Domain.Enums;
 
 namespace E7GEZLY_API.DTOs.Auth
 {

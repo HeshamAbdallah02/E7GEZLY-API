@@ -1,5 +1,6 @@
 ﻿// Attributes/RequireCompleteProfileAttribute.cs
 using E7GEZLY_API.Data;
+using E7GEZLY_API.Domain.Enums;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
@@ -53,13 +54,13 @@ namespace E7GEZLY_API.Attributes
             }
         }
 
-        private static string GetProfileCompletionUrl(Models.VenueType venueType)
+        private static string GetProfileCompletionUrl(VenueType venueType)
         {
             return venueType switch
             {
-                Models.VenueType.PlayStationVenue => "/api/venue/profile/complete/playstation",
-                Models.VenueType.FootballCourt => "/api/venue/profile/complete/court",
-                Models.VenueType.PadelCourt => "/api/venue/profile/complete/court",
+                VenueType.PlayStationVenue => "/api/venue/profile/complete/playstation",
+                VenueType.FootballCourt => "/api/venue/profile/complete/court",
+                VenueType.PadelCourt => "/api/venue/profile/complete/court",
                 _ => "/api/venue/profile/complete"
             };
         }

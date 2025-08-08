@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
+using E7GEZLY_API.Domain.Enums;
 using E7GEZLY_API.Models;
 
 namespace E7GEZLY_API.Extensions

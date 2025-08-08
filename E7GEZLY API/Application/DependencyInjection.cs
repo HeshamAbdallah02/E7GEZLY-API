@@ -37,11 +37,6 @@ namespace E7GEZLY_API.Application
             services.AddScoped<ICurrentUserService, CurrentUserService>();
             services.AddTransient<IDateTimeService, DateTimeService>();
 
-            // Domain services - these contain business logic and should be registered here
-            // as they are used by Application layer handlers
-            services.AddScoped<IVenueProfileCompletionService, VenueProfileCompletionService>();
-            services.AddScoped<IUserVerificationService, UserVerificationService>();
-
             return services;
         }
     }

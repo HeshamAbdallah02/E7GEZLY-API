@@ -1,5 +1,6 @@
 ﻿// Controllers/Auth/VerificationController.cs
 using E7GEZLY_API.Data;
+using E7GEZLY_API.Domain.Enums;
 using E7GEZLY_API.DTOs.Auth;
 using E7GEZLY_API.Models;
 using E7GEZLY_API.Services.Auth;

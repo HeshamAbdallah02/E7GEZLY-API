@@ -1,4 +1,4 @@
-﻿using E7GEZLY_API.Models;
+﻿using E7GEZLY_API.Domain.Enums;
 using System.ComponentModel.DataAnnotations;
 
 namespace E7GEZLY_API.DTOs.Venue
