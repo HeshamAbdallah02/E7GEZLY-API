@@ -1,11 +1,22 @@
 ﻿// E7GEZLY API/Controllers/VenueManagement/VenueSubUserController.cs
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using E7GEZLY_API.Domain.Enums;
 using E7GEZLY_API.DTOs.Venue;
 using E7GEZLY_API.Services.VenueManagement;
 using E7GEZLY_API.Extensions;
 using E7GEZLY_API.Attributes;
-using E7GEZLY_API.Models;
+using E7GEZLY_API.Application.Features.SubUsers.Commands.LoginSubUser;
+using E7GEZLY_API.Application.Features.SubUsers.Commands.ChangeSubUserPassword;
+using E7GEZLY_API.Application.Features.SubUsers.Commands.ResetSubUserPassword;
+using E7GEZLY_API.Application.Features.SubUsers.Commands.LogoutSubUser;
+using E7GEZLY_API.Application.Features.SubUsers.Commands.CreateSubUser;
+using E7GEZLY_API.Application.Features.SubUsers.Commands.UpdateSubUser;
+using E7GEZLY_API.Application.Features.SubUsers.Commands.DeleteSubUser;
+using E7GEZLY_API.Application.Features.SubUsers.Queries.GetSubUsers;
+using E7GEZLY_API.Application.Features.SubUsers.Queries.GetSubUser;
+using E7GEZLY_API.Application.Features.SubUsers.Queries.GetAuditLogs;
+using MediatR;
 
 namespace E7GEZLY_API.Controllers.VenueManagement
 {
@@ -17,17 +28,14 @@ namespace E7GEZLY_API.Controllers.VenueManagement
     [Authorize(Policy = "VenueOperational")]
     public class VenueSubUserController : ControllerBase
     {
-        private readonly IVenueSubUserService _subUserService;
-        private readonly IVenueAuditService _auditService;
+        private readonly IMediator _mediator;
         private readonly ILogger<VenueSubUserController> _logger;
 
         public VenueSubUserController(
-            IVenueSubUserService subUserService,
-            IVenueAuditService auditService,
+            IMediator mediator,
             ILogger<VenueSubUserController> logger)
         {
-            _subUserService = subUserService;
-            _auditService = auditService;
+            _mediator = mediator;
             _logger = logger;
         }
 
@@ -49,12 +57,25 @@ namespace E7GEZLY_API.Controllers.VenueManagement
                     return Forbid();
                 }
 
-                var result = await _subUserService.AuthenticateSubUserAsync(venueId, dto);
-                return Ok(result);
-            }
-            catch (UnauthorizedAccessException ex)
-            {
-                return Unauthorized(new { message = ex.Message });
+                var command = new LoginSubUserCommand
+                {
+                    VenueId = venueId,
+                    Username = dto.Username,
+                    Password = dto.Password,
+                    DeviceName = HttpContext.GetDeviceName(),
+                    DeviceType = HttpContext.DetectDeviceType(),
+                    IpAddress = HttpContext.GetClientIpAddress(),
+                    UserAgent = Request.Headers["User-Agent"].FirstOrDefault()
+                };
+
+                var result = await _mediator.Send(command);
+                
+                if (result.IsSuccess)
+                {
+                    return Ok(result.Data);
+                }
+                
+                return Unauthorized(new { message = result.ErrorMessage });
             }
             catch (Exception ex)
             {
@@ -72,8 +93,15 @@ namespace E7GEZLY_API.Controllers.VenueManagement
         {
             try
             {
-                var subUsers = await _subUserService.GetSubUsersAsync(venueId);
-                return Ok(subUsers);
+                var query = new GetSubUsersQuery { VenueId = venueId };
+                var result = await _mediator.Send(query);
+                
+                if (result.IsSuccess)
+                {
+                    return Ok(result.Data);
+                }
+                
+                return BadRequest(new { message = result.ErrorMessage });
             }
             catch (Exception ex)
             {
@@ -91,12 +119,15 @@ namespace E7GEZLY_API.Controllers.VenueManagement
         {
             try
             {
-                var subUser = await _subUserService.GetSubUserAsync(venueId, subUserId);
-                if (subUser == null)
+                var query = new GetSubUserQuery { VenueId = venueId, Id = subUserId };
+                var result = await _mediator.Send(query);
+                
+                if (result.IsSuccess)
                 {
-                    return NotFound(new { message = "Sub-user not found" });
+                    return Ok(result.Data);
                 }
-                return Ok(subUser);
+                
+                return NotFound(new { message = result.ErrorMessage });
             }
             catch (Exception ex)
             {
@@ -117,19 +148,27 @@ namespace E7GEZLY_API.Controllers.VenueManagement
             try
             {
                 var createdBySubUserId = User.GetSubUserId();
-                var result = await _subUserService.CreateSubUserAsync(
-                    venueId,
-                    createdBySubUserId,
-                    dto);
+                var command = new CreateSubUserCommand
+                {
+                    VenueId = venueId,
+                    CreatedBySubUserId = createdBySubUserId,
+                    Username = dto.Username,
+                    Password = dto.Password,
+                    Role = dto.Role,
+                    Permissions = dto.Permissions ?? GetDefaultPermissions(dto.Role)
+                };
 
-                return CreatedAtAction(
-                    nameof(GetSubUser),
-                    new { venueId, subUserId = result.Id },
-                    result);
-            }
-            catch (InvalidOperationException ex)
-            {
-                return BadRequest(new { message = ex.Message });
+                var result = await _mediator.Send(command);
+                
+                if (result.IsSuccess)
+                {
+                    return CreatedAtAction(
+                        nameof(GetSubUser),
+                        new { venueId, subUserId = result.Data!.Id },
+                        result.Data);
+                }
+                
+                return BadRequest(new { message = result.ErrorMessage });
             }
             catch (Exception ex)
             {
@@ -156,12 +195,23 @@ namespace E7GEZLY_API.Controllers.VenueManagement
                     return BadRequest(new { message = "Cannot change your own role" });
                 }
 
-                var result = await _subUserService.UpdateSubUserAsync(venueId, subUserId, dto);
-                return Ok(result);
-            }
-            catch (InvalidOperationException ex)
-            {
-                return BadRequest(new { message = ex.Message });
+                var command = new UpdateSubUserCommand
+                {
+                    VenueId = venueId,
+                    Id = subUserId,
+                    Role = dto.Role,
+                    Permissions = dto.Permissions,
+                    IsActive = dto.IsActive ?? true
+                };
+
+                var result = await _mediator.Send(command);
+                
+                if (result.IsSuccess)
+                {
+                    return Ok(result.Data);
+                }
+                
+                return BadRequest(new { message = result.ErrorMessage });
             }
             catch (Exception ex)
             {
@@ -186,12 +236,20 @@ namespace E7GEZLY_API.Controllers.VenueManagement
                 }
 
                 var deletedBySubUserId = User.GetSubUserId();
-                await _subUserService.DeleteSubUserAsync(venueId, subUserId, deletedBySubUserId);
-                return NoContent();
-            }
-            catch (InvalidOperationException ex)
-            {
-                return BadRequest(new { message = ex.Message });
+                var command = new DeleteSubUserCommand
+                {
+                    VenueId = venueId,
+                    Id = subUserId
+                };
+
+                var result = await _mediator.Send(command);
+                
+                if (result.IsSuccess)
+                {
+                    return NoContent();
+                }
+                
+                return BadRequest(new { message = result.ErrorMessage });
             }
             catch (Exception ex)
             {
@@ -212,15 +270,22 @@ namespace E7GEZLY_API.Controllers.VenueManagement
             try
             {
                 var subUserId = User.GetSubUserId();
-                var result = await _subUserService.ChangePasswordAsync(
-                    venueId,
-                    subUserId,
-                    dto);
-                return Ok(result);
-            }
-            catch (UnauthorizedAccessException ex)
-            {
-                return Unauthorized(new { message = ex.Message });
+                var command = new ChangeSubUserPasswordCommand
+                {
+                    VenueId = venueId,
+                    SubUserId = subUserId,
+                    CurrentPassword = dto.CurrentPassword,
+                    NewPassword = dto.NewPassword
+                };
+
+                var result = await _mediator.Send(command);
+                
+                if (result.IsSuccess)
+                {
+                    return Ok(new { success = true, message = "Password changed successfully" });
+                }
+                
+                return BadRequest(new { message = result.ErrorMessage });
             }
             catch (Exception ex)
             {
@@ -242,12 +307,23 @@ namespace E7GEZLY_API.Controllers.VenueManagement
             try
             {
                 var resetBySubUserId = User.GetSubUserId();
-                var result = await _subUserService.ResetPasswordAsync(
-                    venueId,
-                    subUserId,
-                    resetBySubUserId,
-                    dto);
-                return Ok(result);
+                var command = new ResetSubUserPasswordCommand
+                {
+                    VenueId = venueId,
+                    SubUserId = subUserId,
+                    ResetBySubUserId = resetBySubUserId,
+                    NewPassword = dto.NewPassword,
+                    MustChangePassword = dto.MustChangePassword
+                };
+
+                var result = await _mediator.Send(command);
+                
+                if (result.IsSuccess)
+                {
+                    return Ok(new { success = true, message = "Password reset successfully" });
+                }
+                
+                return BadRequest(new { message = result.ErrorMessage });
             }
             catch (Exception ex)
             {
@@ -267,7 +343,8 @@ namespace E7GEZLY_API.Controllers.VenueManagement
         {
             try
             {
-                var result = await _auditService.GetAuditLogsAsync(venueId, query);
+                var mediatorQuery = new GetAuditLogsQuery { VenueId = venueId, QueryDto = query };
+                var result = await _mediator.Send(mediatorQuery);
                 return Ok(result);
             }
             catch (Exception ex)
@@ -287,14 +364,32 @@ namespace E7GEZLY_API.Controllers.VenueManagement
             try
             {
                 var subUserId = User.GetSubUserId();
-                await _subUserService.LogoutAsync(subUserId);
-                return NoContent();
+                var command = new LogoutSubUserCommand { SubUserId = subUserId };
+                var result = await _mediator.Send(command);
+                
+                if (result.IsSuccess)
+                {
+                    return NoContent();
+                }
+                
+                return BadRequest(new { message = result.ErrorMessage });
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error during sub-user logout for venue {VenueId}", venueId);
                 return StatusCode(500, new { message = "An error occurred during logout" });
             }
+        }
+
+        private static VenuePermissions GetDefaultPermissions(VenueSubUserRole role)
+        {
+            return role switch
+            {
+                VenueSubUserRole.Admin => VenuePermissions.AdminPermissions,
+                VenueSubUserRole.Operator => VenuePermissions.OperatorPermissions,
+                VenueSubUserRole.Staff => VenuePermissions.StaffPermissions,
+                _ => VenuePermissions.None
+            };
         }
     }
 }

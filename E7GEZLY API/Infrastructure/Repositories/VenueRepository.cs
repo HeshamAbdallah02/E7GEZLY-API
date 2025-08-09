@@ -5,6 +5,7 @@ using E7GEZLY_API.Domain.Enums;
 using E7GEZLY_API.Domain.Repositories;
 using E7GEZLY_API.Domain.ValueObjects;
 using Microsoft.EntityFrameworkCore;
+using System.Reflection;
 
 namespace E7GEZLY_API.Infrastructure.Repositories
 {
@@ -162,24 +163,50 @@ namespace E7GEZLY_API.Infrastructure.Repositories
             throw new NotImplementedException("GetCompletedProfilesAsync will be implemented when needed");
         }
 
-        public Task<VenueSubUser?> GetSubUserByIdAsync(Guid subUserId, CancellationToken cancellationToken = default)
+        public async Task<VenueSubUser?> GetSubUserByIdAsync(Guid subUserId, CancellationToken cancellationToken = default)
         {
-            throw new NotImplementedException("GetSubUserByIdAsync will be implemented when needed");
+            var efSubUser = await _context.VenueSubUsers
+                .Include(su => su.Venue)
+                .FirstOrDefaultAsync(su => su.Id == subUserId, cancellationToken);
+
+            return efSubUser != null ? MapToDomainVenueSubUser(efSubUser) : null;
         }
 
-        public Task<VenueSubUser?> GetSubUserByUsernameAsync(Guid venueId, string username, CancellationToken cancellationToken = default)
+        public async Task<VenueSubUser?> GetSubUserByUsernameAsync(Guid venueId, string username, CancellationToken cancellationToken = default)
         {
-            throw new NotImplementedException("GetSubUserByUsernameAsync will be implemented when needed");
+            var efSubUser = await _context.VenueSubUsers
+                .Include(su => su.Venue)
+                .FirstOrDefaultAsync(su => su.VenueId == venueId && su.Username == username, cancellationToken);
+
+            return efSubUser != null ? MapToDomainVenueSubUser(efSubUser) : null;
         }
 
-        public Task<bool> SubUserUsernameExistsInVenueAsync(Guid venueId, string username, Guid? excludeSubUserId = null, CancellationToken cancellationToken = default)
+        public async Task<bool> SubUserUsernameExistsInVenueAsync(Guid venueId, string username, Guid? excludeSubUserId = null, CancellationToken cancellationToken = default)
         {
-            throw new NotImplementedException("SubUserUsernameExistsInVenueAsync will be implemented when needed");
+            var query = _context.VenueSubUsers
+                .Where(su => su.VenueId == venueId && su.Username == username);
+
+            if (excludeSubUserId.HasValue)
+            {
+                query = query.Where(su => su.Id != excludeSubUserId.Value);
+            }
+
+            return await query.AnyAsync(cancellationToken);
         }
 
-        public Task<IEnumerable<VenueSubUser>> GetVenueSubUsersAsync(Guid venueId, bool includeInactive = false, CancellationToken cancellationToken = default)
+        public async Task<IEnumerable<VenueSubUser>> GetVenueSubUsersAsync(Guid venueId, bool includeInactive = false, CancellationToken cancellationToken = default)
         {
-            throw new NotImplementedException("GetVenueSubUsersAsync will be implemented when needed");
+            var query = _context.VenueSubUsers
+                .Include(su => su.Venue)
+                .Where(su => su.VenueId == venueId);
+
+            if (!includeInactive)
+            {
+                query = query.Where(su => su.IsActive);
+            }
+
+            var efSubUsers = await query.ToListAsync(cancellationToken);
+            return efSubUsers.Select(su => MapToDomainVenueSubUser(su));
         }
 
         public Task<IEnumerable<VenueSubUser>> GetSubUsersByVenueIdAsync(Guid venueId, CancellationToken cancellationToken = default)
@@ -188,24 +215,40 @@ namespace E7GEZLY_API.Infrastructure.Repositories
             return GetVenueSubUsersAsync(venueId, false, cancellationToken);
         }
 
-        public Task<VenueSubUser?> GetFounderAdminAsync(Guid venueId, CancellationToken cancellationToken = default)
+        public async Task<VenueSubUser?> GetFounderAdminAsync(Guid venueId, CancellationToken cancellationToken = default)
         {
-            throw new NotImplementedException("GetFounderAdminAsync will be implemented when needed");
+            var efSubUser = await _context.VenueSubUsers
+                .Include(su => su.Venue)
+                .FirstOrDefaultAsync(su => su.VenueId == venueId && su.IsFounderAdmin, cancellationToken);
+
+            return efSubUser != null ? MapToDomainVenueSubUser(efSubUser) : null;
         }
 
-        public Task<VenueSubUserSession?> GetSubUserSessionAsync(Guid sessionId, CancellationToken cancellationToken = default)
+        public async Task<VenueSubUserSession?> GetSubUserSessionAsync(Guid sessionId, CancellationToken cancellationToken = default)
         {
-            throw new NotImplementedException("GetSubUserSessionAsync will be implemented when needed");
+            var efSession = await _context.VenueSubUserSessions
+                .FirstOrDefaultAsync(s => s.Id == sessionId, cancellationToken);
+
+            return efSession != null ? MapToDomainVenueSubUserSession(efSession) : null;
         }
 
-        public Task<VenueSubUserSession?> GetActiveSubUserSessionByTokenAsync(string refreshToken, CancellationToken cancellationToken = default)
+        public async Task<VenueSubUserSession?> GetActiveSubUserSessionByTokenAsync(string refreshToken, CancellationToken cancellationToken = default)
         {
-            throw new NotImplementedException("GetActiveSubUserSessionByTokenAsync will be implemented when needed");
+            var efSession = await _context.VenueSubUserSessions
+                .FirstOrDefaultAsync(s => s.RefreshToken == refreshToken && 
+                                         s.IsActive && 
+                                         s.RefreshTokenExpiry > DateTime.UtcNow, cancellationToken);
+
+            return efSession != null ? MapToDomainVenueSubUserSession(efSession) : null;
         }
 
-        public Task<IEnumerable<VenueSubUserSession>> GetActiveSubUserSessionsAsync(Guid subUserId, CancellationToken cancellationToken = default)
+        public async Task<IEnumerable<VenueSubUserSession>> GetActiveSubUserSessionsAsync(Guid subUserId, CancellationToken cancellationToken = default)
         {
-            throw new NotImplementedException("GetActiveSubUserSessionsAsync will be implemented when needed");
+            var efSessions = await _context.VenueSubUserSessions
+                .Where(s => s.SubUserId == subUserId && s.IsActive && s.RefreshTokenExpiry > DateTime.UtcNow)
+                .ToListAsync(cancellationToken);
+
+            return efSessions.Select(s => MapToDomainVenueSubUserSession(s));
         }
 
         public Task<IEnumerable<VenueAuditLog>> GetAuditLogsAsync(Guid venueId, int skip = 0, int take = 50, CancellationToken cancellationToken = default)
@@ -268,9 +311,19 @@ namespace E7GEZLY_API.Infrastructure.Repositories
             throw new NotImplementedException("CleanupExpiredSubUserSessionsAsync will be implemented when needed");
         }
 
-        public Task EndAllSubUserSessionsAsync(Guid subUserId, CancellationToken cancellationToken = default)
+        public async Task EndAllSubUserSessionsAsync(Guid subUserId, CancellationToken cancellationToken = default)
         {
-            throw new NotImplementedException("EndAllSubUserSessionsAsync will be implemented when needed");
+            var sessions = await _context.VenueSubUserSessions
+                .Where(s => s.SubUserId == subUserId && s.IsActive)
+                .ToListAsync(cancellationToken);
+
+            foreach (var session in sessions)
+            {
+                session.IsActive = false;
+                session.LogoutAt = DateTime.UtcNow;
+                session.LogoutReason = "Admin logout";
+                session.UpdatedAt = DateTime.UtcNow;
+            }
         }
 
         public Task<Dictionary<VenueType, int>> GetVenueCountsByTypeAsync(CancellationToken cancellationToken = default)
@@ -352,6 +405,72 @@ namespace E7GEZLY_API.Infrastructure.Repositories
                 CreatedAt = domainVenue.CreatedAt,
                 UpdatedAt = domainVenue.UpdatedAt
             };
+        }
+
+        // Sub-user mapping methods
+        private Domain.Entities.VenueSubUser MapToDomainVenueSubUser(Models.VenueSubUser efSubUser)
+        {
+            // Use reflection to create the domain entity since constructors are private
+            var domainSubUser = Domain.Entities.VenueSubUser.Create(
+                efSubUser.VenueId,
+                efSubUser.Username,
+                efSubUser.PasswordHash,
+                efSubUser.Role,
+                efSubUser.Permissions,
+                efSubUser.CreatedBySubUserId ?? Guid.Empty
+            );
+
+            // Set additional properties using reflection
+            SetPrivateProperty(domainSubUser, nameof(Domain.Entities.VenueSubUser.Id), efSubUser.Id);
+            SetPrivateProperty(domainSubUser, nameof(Domain.Entities.VenueSubUser.IsActive), efSubUser.IsActive);
+            SetPrivateProperty(domainSubUser, nameof(Domain.Entities.VenueSubUser.IsFounderAdmin), efSubUser.IsFounderAdmin);
+            SetPrivateProperty(domainSubUser, nameof(Domain.Entities.VenueSubUser.LastLoginAt), efSubUser.LastLoginAt);
+            SetPrivateProperty(domainSubUser, nameof(Domain.Entities.VenueSubUser.FailedLoginAttempts), efSubUser.FailedLoginAttempts);
+            SetPrivateProperty(domainSubUser, nameof(Domain.Entities.VenueSubUser.LockoutEnd), efSubUser.LockoutEnd);
+            SetPrivateProperty(domainSubUser, nameof(Domain.Entities.VenueSubUser.PasswordChangedAt), efSubUser.PasswordChangedAt);
+            SetPrivateProperty(domainSubUser, nameof(Domain.Entities.VenueSubUser.MustChangePassword), efSubUser.MustChangePassword);
+            SetPrivateProperty(domainSubUser, "CreatedAt", efSubUser.CreatedAt);
+            SetPrivateProperty(domainSubUser, "UpdatedAt", efSubUser.UpdatedAt);
+
+            return domainSubUser;
+        }
+
+        private Domain.Entities.VenueSubUserSession MapToDomainVenueSubUserSession(Models.VenueSubUserSession efSession)
+        {
+            var domainSession = Domain.Entities.VenueSubUserSession.Create(
+                efSession.SubUserId,
+                efSession.RefreshToken,
+                efSession.RefreshTokenExpiry,
+                efSession.DeviceName,
+                efSession.DeviceType,
+                efSession.IpAddress,
+                efSession.UserAgent,
+                efSession.AccessTokenJti
+            );
+
+            // Set additional properties using reflection
+            SetPrivateProperty(domainSession, nameof(Domain.Entities.VenueSubUserSession.Id), efSession.Id);
+            SetPrivateProperty(domainSession, nameof(Domain.Entities.VenueSubUserSession.IsActive), efSession.IsActive);
+            SetPrivateProperty(domainSession, nameof(Domain.Entities.VenueSubUserSession.LastActivityAt), efSession.LastActivityAt);
+            SetPrivateProperty(domainSession, nameof(Domain.Entities.VenueSubUserSession.LogoutAt), efSession.LogoutAt);
+            SetPrivateProperty(domainSession, nameof(Domain.Entities.VenueSubUserSession.LogoutReason), efSession.LogoutReason);
+            SetPrivateProperty(domainSession, "CreatedAt", efSession.CreatedAt);
+            SetPrivateProperty(domainSession, "UpdatedAt", efSession.UpdatedAt);
+
+            return domainSession;
+        }
+
+        private static void SetPrivateProperty<T>(T obj, string propertyName, object? value)
+        {
+            var property = typeof(T).GetProperty(propertyName, 
+                System.Reflection.BindingFlags.NonPublic | 
+                System.Reflection.BindingFlags.Public | 
+                System.Reflection.BindingFlags.Instance);
+            
+            if (property != null && property.CanWrite)
+            {
+                property.SetValue(obj, value);
+            }
         }
     }
 }
