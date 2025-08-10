@@ -1,0 +1,95 @@
+### E7GEZLY API Customer Authentication Test File
+### Using Clean Architecture MediatR Pattern
+
+### 1. Register Customer
+POST https://localhost:7296/api/auth/customer/register
+Content-Type: application/json
+
+{
+  "firstName": "Ahmed",
+  "lastName": "Mohamed", 
+  "phoneNumber": "01012345678",
+  "email": "ahmed.test@example.com",
+  "password": "TestPassword123!",
+  "confirmPassword": "TestPassword123!",
+  "dateOfBirth": "1995-06-15",
+  "address": {
+    "governorate": "Cairo",
+    "district": "New Cairo",
+    "streetAddress": "123 Test Street",
+    "landmark": "Near Test Mall",
+    "latitude": 30.0444,
+    "longitude": 31.2357
+  }
+}
+
+### 2. Customer Login - Email
+POST https://localhost:7296/api/auth/customer/login
+Content-Type: application/json
+
+{
+  "emailOrPhone": "ahmed.test@example.com",
+  "password": "TestPassword123!"
+}
+
+### 3. Customer Login - Phone
+POST https://localhost:7296/api/auth/customer/login
+Content-Type: application/json
+
+{
+  "emailOrPhone": "01012345678",
+  "password": "TestPassword123!"
+}
+
+### 4. Register Customer - Invalid Email
+POST https://localhost:7296/api/auth/customer/register
+Content-Type: application/json
+
+{
+  "firstName": "Test",
+  "lastName": "User",
+  "phoneNumber": "01087654321",
+  "email": "invalid-email",
+  "password": "TestPassword123!",
+  "confirmPassword": "TestPassword123!",
+  "dateOfBirth": "1995-01-01"
+}
+
+### 5. Register Customer - Age Under 15
+POST https://localhost:7296/api/auth/customer/register
+Content-Type: application/json
+
+{
+  "firstName": "Young",
+  "lastName": "User",
+  "phoneNumber": "01098765432",
+  "email": "young.user@example.com", 
+  "password": "TestPassword123!",
+  "confirmPassword": "TestPassword123!",
+  "dateOfBirth": "2015-01-01"
+}
+
+### 6. Register Customer - Age Over 80
+POST https://localhost:7296/api/auth/customer/register
+Content-Type: application/json
+
+{
+  "firstName": "Old",
+  "lastName": "User",
+  "phoneNumber": "01098765433",
+  "email": "old.user@example.com",
+  "password": "TestPassword123!",
+  "confirmPassword": "TestPassword123!",
+  "dateOfBirth": "1940-01-01"
+}
+
+### 7. Customer Login - Invalid Credentials
+POST https://localhost:7296/api/auth/customer/login
+Content-Type: application/json
+
+{
+  "emailOrPhone": "ahmed.test@example.com",
+  "password": "WrongPassword"
+}
+
+###
