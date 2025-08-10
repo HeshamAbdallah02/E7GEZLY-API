@@ -10,6 +10,13 @@ namespace E7GEZLY_API.Services.VenueManagement
     {
         Task LogActionAsync(CreateAuditLogDto dto);
 
+        Task LogVenueActionAsync(
+            Guid venueId,
+            string userId,
+            string action,
+            string description,
+            object? additionalData = null);
+
         Task<PagedResult<VenueAuditLogResponseDto>> GetAuditLogsAsync(
             Guid venueId,
             VenueAuditLogQueryDto query);

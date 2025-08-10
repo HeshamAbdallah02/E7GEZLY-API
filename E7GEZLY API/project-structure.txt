@@ -1,0 +1,428 @@
+﻿E7GEZLY API/
+├── Application
+│   ├── Common
+│   │   ├── Behaviors
+│   │   │   ├── LoggingBehavior.cs
+│   │   │   ├── PerformanceBehavior.cs
+│   │   │   └── ValidationBehavior.cs
+│   │   ├── Interfaces
+│   │   │   ├── IApplicationDbContext.cs
+│   │   │   ├── ICurrentUserService.cs
+│   │   │   ├── IDateTimeService.cs
+│   │   │   ├── IOperationResult.cs
+│   │   │   └── IUnitOfWork.cs
+│   │   ├── Mappings
+│   │   │   └── MappingProfile.cs
+│   │   ├── Models
+│   │   │   ├── ApplicationResult.cs
+│   │   │   └── OperationResult.cs
+│   │   └── Services
+│   │       ├── CurrentUserService.cs
+│   │       └── DateTimeService.cs
+│   ├── Features
+│   │   ├── Authentication
+│   │   │   ├── Commands
+│   │   │   │   ├── CreateFirstAdmin
+│   │   │   │   │   ├── CreateFirstAdminCommand.cs
+│   │   │   │   │   └── CreateFirstAdminHandler.cs
+│   │   │   │   ├── LinkSocialAccount
+│   │   │   │   │   ├── LinkSocialAccountCommand.cs
+│   │   │   │   │   ├── LinkSocialAccountHandler.cs
+│   │   │   │   │   └── LinkSocialAccountValidator.cs
+│   │   │   │   ├── Login
+│   │   │   │   │   ├── VenueLoginCommand.cs
+│   │   │   │   │   ├── VenueLoginHandler.cs
+│   │   │   │   │   └── VenueLoginValidator.cs
+│   │   │   │   ├── RefreshToken
+│   │   │   │   │   ├── RefreshTokenCommand.cs
+│   │   │   │   │   ├── RefreshTokenHandler.cs
+│   │   │   │   │   └── RefreshTokenValidator.cs
+│   │   │   │   ├── Register
+│   │   │   │   │   ├── RegisterVenueCommand.cs
+│   │   │   │   │   ├── RegisterVenueHandler.cs
+│   │   │   │   │   └── RegisterVenueValidator.cs
+│   │   │   │   ├── ResetPassword
+│   │   │   │   │   ├── ConfirmPasswordResetCommand.cs
+│   │   │   │   │   ├── ConfirmPasswordResetHandler.cs
+│   │   │   │   │   ├── ConfirmPasswordResetValidator.cs
+│   │   │   │   │   ├── RequestPasswordResetCommand.cs
+│   │   │   │   │   ├── RequestPasswordResetHandler.cs
+│   │   │   │   │   └── RequestPasswordResetValidator.cs
+│   │   │   │   ├── SendEmailVerification
+│   │   │   │   │   ├── SendEmailVerificationCommand.cs
+│   │   │   │   │   ├── SendEmailVerificationHandler.cs
+│   │   │   │   │   └── SendEmailVerificationValidator.cs
+│   │   │   │   ├── SendVerificationCode
+│   │   │   │   │   ├── SendVerificationCodeCommand.cs
+│   │   │   │   │   ├── SendVerificationCodeHandler.cs
+│   │   │   │   │   └── SendVerificationCodeValidator.cs
+│   │   │   │   ├── SocialLogin
+│   │   │   │   │   ├── SocialLoginCommand.cs
+│   │   │   │   │   ├── SocialLoginHandler.cs
+│   │   │   │   │   └── SocialLoginValidator.cs
+│   │   │   │   ├── UnlinkSocialAccount
+│   │   │   │   │   ├── UnlinkSocialAccountCommand.cs
+│   │   │   │   │   ├── UnlinkSocialAccountHandler.cs
+│   │   │   │   │   └── UnlinkSocialAccountValidator.cs
+│   │   │   │   ├── VerifyAccount
+│   │   │   │   │   ├── VerifyAccountCommand.cs
+│   │   │   │   │   ├── VerifyAccountHandler.cs
+│   │   │   │   │   └── VerifyAccountValidator.cs
+│   │   │   │   └── VerifyEmail
+│   │   │   │       ├── VerifyEmailCommand.cs
+│   │   │   │       ├── VerifyEmailHandler.cs
+│   │   │   │       └── VerifyEmailValidator.cs
+│   │   │   └── Queries
+│   │   │       ├── GetAvailableProviders
+│   │   │       │   ├── GetAvailableProvidersHandler.cs
+│   │   │       │   ├── GetAvailableProvidersQuery.cs
+│   │   │       │   └── GetAvailableProvidersValidator.cs
+│   │   │       ├── GetLinkedAccounts
+│   │   │       │   ├── GetLinkedAccountsHandler.cs
+│   │   │       │   ├── GetLinkedAccountsQuery.cs
+│   │   │       │   └── GetLinkedAccountsValidator.cs
+│   │   │       ├── GetUserProfile
+│   │   │       │   ├── GetUserProfileHandler.cs
+│   │   │       │   ├── GetUserProfileQuery.cs
+│   │   │       │   └── GetUserProfileValidator.cs
+│   │   │       └── ValidateToken
+│   │   │           ├── ValidateTokenHandler.cs
+│   │   │           ├── ValidateTokenQuery.cs
+│   │   │           └── ValidateTokenValidator.cs
+│   │   ├── Location
+│   │   │   ├── Commands
+│   │   │   │   ├── GeocodeCoordinates
+│   │   │   │   │   ├── GeocodeCoordinatesCommand.cs
+│   │   │   │   │   └── GeocodeCoordinatesHandler.cs
+│   │   │   │   └── ValidateAddress
+│   │   │   │       ├── ValidateAddressCommand.cs
+│   │   │   │       └── ValidateAddressHandler.cs
+│   │   │   └── Queries
+│   │   │       ├── GetDistrictFromCoordinates
+│   │   │       │   ├── GetDistrictFromCoordinatesHandler.cs
+│   │   │       │   └── GetDistrictFromCoordinatesQuery.cs
+│   │   │       ├── GetDistricts
+│   │   │       │   ├── GetDistrictsHandler.cs
+│   │   │       │   └── GetDistrictsQuery.cs
+│   │   │       └── GetGovernorates
+│   │   │           ├── GetGovernoratesHandler.cs
+│   │   │           └── GetGovernoratesQuery.cs
+│   │   ├── SubUsers
+│   │   │   ├── Commands
+│   │   │   │   ├── ChangeSubUserPassword
+│   │   │   │   │   ├── ChangeSubUserPasswordCommand.cs
+│   │   │   │   │   └── ChangeSubUserPasswordHandler.cs
+│   │   │   │   ├── CreateSubUser
+│   │   │   │   │   ├── CreateSubUserCommand.cs
+│   │   │   │   │   ├── CreateSubUserHandler.cs
+│   │   │   │   │   └── CreateSubUserValidator.cs
+│   │   │   │   ├── DeleteSubUser
+│   │   │   │   │   ├── DeleteSubUserCommand.cs
+│   │   │   │   │   ├── DeleteSubUserHandler.cs
+│   │   │   │   │   └── DeleteSubUserValidator.cs
+│   │   │   │   ├── LoginSubUser
+│   │   │   │   │   ├── LoginSubUserCommand.cs
+│   │   │   │   │   ├── LoginSubUserHandler.cs
+│   │   │   │   │   └── LoginSubUserValidator.cs
+│   │   │   │   ├── LogoutSubUser
+│   │   │   │   │   ├── LogoutSubUserCommand.cs
+│   │   │   │   │   └── LogoutSubUserHandler.cs
+│   │   │   │   ├── ResetSubUserPassword
+│   │   │   │   │   ├── ResetSubUserPasswordCommand.cs
+│   │   │   │   │   └── ResetSubUserPasswordHandler.cs
+│   │   │   │   └── UpdateSubUser
+│   │   │   │       ├── UpdateSubUserCommand.cs
+│   │   │   │       ├── UpdateSubUserHandler.cs
+│   │   │   │       └── UpdateSubUserValidator.cs
+│   │   │   └── Queries
+│   │   │       ├── GetAuditLogs
+│   │   │       │   ├── GetAuditLogsHandler.cs
+│   │   │       │   └── GetAuditLogsQuery.cs
+│   │   │       ├── GetSubUser
+│   │   │       │   ├── GetSubUserHandler.cs
+│   │   │       │   ├── GetSubUserQuery.cs
+│   │   │       │   └── GetSubUserValidator.cs
+│   │   │       └── GetSubUsers
+│   │   │           ├── GetSubUsersHandler.cs
+│   │   │           ├── GetSubUsersQuery.cs
+│   │   │           └── GetSubUsersValidator.cs
+│   │   ├── Testing
+│   │   │   └── Queries
+│   │   │       ├── GetAnonymousTest
+│   │   │       │   ├── GetAnonymousTestHandler.cs
+│   │   │       │   └── GetAnonymousTestQuery.cs
+│   │   │       └── TestGeocoding
+│   │   │           ├── TestGeocodingHandler.cs
+│   │   │           └── TestGeocodingQuery.cs
+│   │   └── VenueProfile
+│   │       ├── Commands
+│   │       │   ├── CompleteCourtProfile
+│   │       │   │   ├── CompleteCourtProfileCommand.cs
+│   │       │   │   ├── CompleteCourtProfileHandler.cs
+│   │       │   │   └── CompleteCourtProfileValidator.cs
+│   │       │   ├── CompletePlayStationProfile
+│   │       │   │   ├── CompletePlayStationProfileCommand.cs
+│   │       │   │   ├── CompletePlayStationProfileHandler.cs
+│   │       │   │   └── CompletePlayStationProfileValidator.cs
+│   │       │   └── CompleteProfile
+│   │       │       ├── CompleteVenueProfileCommand.cs
+│   │       │       ├── CompleteVenueProfileHandler.cs
+│   │       │       └── CompleteVenueProfileValidator.cs
+│   │       └── Queries
+│   │           ├── GetVenueProfile
+│   │           │   ├── GetVenueProfileHandler.cs
+│   │           │   ├── GetVenueProfileQuery.cs
+│   │           │   └── GetVenueProfileValidator.cs
+│   │           └── IsProfileComplete
+│   │               ├── IsProfileCompleteHandler.cs
+│   │               ├── IsProfileCompleteQuery.cs
+│   │               └── IsProfileCompleteValidator.cs
+│   └── DependencyInjection.cs
+├── Attributes
+│   ├── RateLimitAttribute.cs
+│   ├── RequireCompleteProfileAttribute.cs
+│   ├── RequireVenueGatewayAttribute.cs
+│   └── RequireVenuePermissionAttribute.cs
+├── Configuration
+│   ├── CacheConfiguration.cs
+│   └── RateLimitConfiguration.cs
+├── Controllers
+│   ├── Auth
+│   │   ├── AccountController.cs
+│   │   ├── BaseAuthController.cs
+│   │   ├── CustomerAuthController.cs
+│   │   ├── PasswordResetController.cs
+│   │   ├── SocialAuthController.cs
+│   │   ├── TokenController.cs
+│   │   ├── VenueAuthController.cs
+│   │   └── VerificationController.cs
+│   ├── VenueManagement
+│   │   ├── VenueBookingController.cs
+│   │   ├── VenueProfileController.cs
+│   │   └── VenueSubUserController.cs
+│   ├── LocationController.cs
+│   └── TestController.cs
+├── Converters
+│   └── TimeSpanJsonConverter.cs
+├── Data
+│   ├── AppDbContext.cs
+│   ├── DbInitializer.cs
+│   └── LocationSeeder.cs
+├── Domain
+│   ├── Common
+│   │   ├── AggregateRoot.cs
+│   │   ├── BaseEntity.cs
+│   │   ├── DomainException.cs
+│   │   ├── IDomainEvent.cs
+│   │   └── ValueObject.cs
+│   ├── Entities
+│   │   ├── CustomerProfile.cs
+│   │   ├── LocationEntities.cs
+│   │   ├── Reservation.cs
+│   │   ├── User.cs
+│   │   ├── Venue.cs
+│   │   ├── VenueAuditLog.cs
+│   │   ├── VenueDetails.cs
+│   │   └── VenueSubUser.cs
+│   ├── Enums
+│   │   └── VenueEnums.cs
+│   ├── Events
+│   │   ├── UserEvents.cs
+│   │   └── VenueEvents.cs
+│   ├── Repositories
+│   │   ├── ICustomerProfileRepository.cs
+│   │   ├── ILocationRepository.cs
+│   │   ├── IUserRepository.cs
+│   │   └── IVenueRepository.cs
+│   ├── Services
+│   │   ├── CachedVenueAuthorizationService.cs
+│   │   ├── IPasswordVerificationService.cs
+│   │   ├── IUserVerificationService.cs
+│   │   ├── IVenueAuthorizationService.cs
+│   │   ├── IVenueProfileCompletionService.cs
+│   │   ├── PasswordVerificationService.cs
+│   │   ├── UserVerificationService.cs
+│   │   ├── VenueAuthorizationService.cs
+│   │   └── VenueProfileCompletionService.cs
+│   ├── ValueObjects
+│   │   ├── Address.cs
+│   │   ├── Coordinates.cs
+│   │   ├── PersonName.cs
+│   │   └── VenueName.cs
+│   └── README-Domain-Layer.md
+├── DTOs
+│   ├── Auth
+│   │   ├── AccountManagementDtos.cs
+│   │   ├── AuthResponseDto.cs
+│   │   ├── LoginDto.cs
+│   │   ├── PasswordResetDto.cs
+│   │   ├── RefreshTokenDto.cs
+│   │   ├── RegisterCustomerDto.cs
+│   │   ├── RegisterVenueDto.cs
+│   │   ├── SessionDtos.cs
+│   │   ├── SocialAuthDtos.cs
+│   │   └── VerificationDtos.cs
+│   ├── Common
+│   │   ├── ApiResponseDtos.cs
+│   │   └── PagedResponse.cs
+│   ├── Customer
+│   │   └── CustomerProfileDtos.cs
+│   ├── Location
+│   │   ├── AddressResponseDto.cs
+│   │   └── LocationDtos.cs
+│   ├── User
+│   │   └── UserDtos.cs
+│   └── Venue
+│       ├── VenueAuditLogDtos.cs
+│       ├── VenueProfileCompletionDtos.cs
+│       ├── VenueProfileDtos.cs
+│       └── VenueSubUserDtos.cs
+├── Exceptions
+│   ├── GeocodingException.cs
+│   └── NotFoundException.cs
+├── Extensions
+│   ├── AuthenticationExtensions.cs
+│   ├── CacheExtensions.cs
+│   ├── ClaimsPrincipalExtensions.cs
+│   ├── CorsExtensions.cs
+│   ├── HealthChecksExtensions.cs
+│   ├── HttpContextExtensions.cs
+│   ├── RateLimitExtensions.cs
+│   ├── ServiceCollectionExtensions.cs
+│   ├── ServiceDecoratorExtensions.cs
+│   ├── SocialAuthExtensions.cs
+│   ├── SwaggerExtensions.cs
+│   └── WebApplicationExtensions.cs
+├── HealthChecks
+│   ├── NominatimHealthCheck.cs
+│   └── RedisHealthCheck.cs
+├── Infrastructure
+│   ├── Mappings
+│   │   ├── DomainExtensions.cs.backup
+│   │   ├── DomainToModelMappingProfile.cs.backup
+│   │   ├── ModelExtensions.cs.backup
+│   │   ├── SimpleExtensions.cs
+│   │   └── SimpleMappingProfile.cs
+│   ├── Persistence
+│   │   ├── Configurations
+│   │   │   ├── CustomerProfileConfiguration.cs
+│   │   │   ├── ExternalLoginConfiguration.cs
+│   │   │   ├── ReservationConfiguration.cs
+│   │   │   ├── UserConfiguration.cs
+│   │   │   ├── UserSessionConfiguration.cs
+│   │   │   ├── VenueAuditLogConfiguration.cs
+│   │   │   ├── VenueConfiguration.cs
+│   │   │   ├── VenueImageConfiguration.cs
+│   │   │   ├── VenuePlayStationDetailsConfiguration.cs
+│   │   │   ├── VenuePricingConfiguration.cs
+│   │   │   ├── VenueSubUserConfiguration.cs
+│   │   │   ├── VenueSubUserSessionConfiguration.cs
+│   │   │   └── VenueWorkingHoursConfiguration.cs
+│   │   └── UnitOfWork.cs
+│   ├── Repositories
+│   │   ├── CustomerProfileRepository.cs
+│   │   ├── LocationRepository.cs
+│   │   ├── UserRepository.cs
+│   │   └── VenueRepository.cs
+│   └── DependencyInjection.cs
+├── Middleware
+│   ├── CustomRateLimitMiddleware.cs
+│   ├── GlobalExceptionMiddleware.cs
+│   ├── TokenBlacklistMiddleware.cs
+│   └── UserRateLimitMiddleware.cs
+├── Migrations
+│   ├── 20250722134948_InitialCreate.cs
+│   ├── 20250722134948_InitialCreate.Designer.cs
+│   ├── 20250722145940_AddPasswordResetFields.cs
+│   ├── 20250722145940_AddPasswordResetFields.Designer.cs
+│   ├── 20250723170828_AddIsProfileCompleteToVenue.cs
+│   ├── 20250723170828_AddIsProfileCompleteToVenue.Designer.cs
+│   ├── 20250724115036_RemoveRefreshTokenFromUser.cs
+│   ├── 20250724115036_RemoveRefreshTokenFromUser.Designer.cs
+│   ├── 20250726133303_AddExternalLoginsTable.cs
+│   ├── 20250726133303_AddExternalLoginsTable.Designer.cs
+│   ├── 20250728210408_AddVenueProfileCompletionEntities.cs
+│   ├── 20250728210408_AddVenueProfileCompletionEntities.Designer.cs
+│   ├── 20250731152119_AddVenueSubUserSystem.cs
+│   ├── 20250731152119_AddVenueSubUserSystem.Designer.cs
+│   ├── 20250731204241_AddVenueSubUserSessions.cs
+│   ├── 20250731204241_AddVenueSubUserSessions.Designer.cs
+│   ├── 20250801152532_AddAccessTokenJtiToVenueSubUserSession.cs
+│   ├── 20250801152532_AddAccessTokenJtiToVenueSubUserSession.Designer.cs
+│   └── AppDbContextModelSnapshot.cs
+├── Models
+│   ├── ApplicationUser.cs
+│   ├── BaseSyncEntity.cs
+│   ├── CustomerProfile.cs
+│   ├── ExternalLogin.cs
+│   ├── Location.cs
+│   ├── Reservation.cs
+│   ├── UserSession.cs
+│   ├── Venue.cs
+│   ├── VenueAuditLog.cs
+│   ├── VenueImage.cs
+│   ├── VenuePlayStationDetails.cs
+│   ├── VenuePricing.cs
+│   ├── VenueSubUser.cs
+│   ├── VenueSubUserSession.cs
+│   └── VenueWorkingHours.cs
+├── Properties
+│   └── launchSettings.json
+├── Services
+│   ├── Auth
+│   │   ├── CachedAuthenticationService.cs
+│   │   ├── ICachedAuthenticationService.cs
+│   │   ├── IProfileService.cs
+│   │   ├── ISocialAuthService.cs
+│   │   ├── ITokenBlacklistService.cs
+│   │   ├── ITokenService.cs
+│   │   ├── IVerificationService.cs
+│   │   ├── ProfileService.cs
+│   │   ├── SocialAuthService.cs
+│   │   ├── TokenBlacklistService.cs
+│   │   ├── TokenService.cs
+│   │   └── VerificationService.cs
+│   ├── BackgroundServices
+│   │   └── SessionCleanupService.cs
+│   ├── Cache
+│   │   ├── DistributedRateLimitCounterStore.cs
+│   │   ├── ICacheService.cs
+│   │   ├── InMemoryCacheService.cs
+│   │   └── RedisCacheService.cs
+│   ├── Communication
+│   │   ├── IEmailService.cs
+│   │   ├── ISmsService.cs
+│   │   ├── MockEmailService.cs
+│   │   ├── MockSmsService.cs
+│   │   └── SendGridEmailService.cs
+│   ├── Location
+│   │   ├── CachedGeocodingService.cs
+│   │   ├── CachedLocationService.cs
+│   │   ├── IGeocodingService.cs
+│   │   ├── ILocationService.cs
+│   │   ├── LocationService.cs
+│   │   └── NominatimGeocodingService.cs
+│   └── VenueManagement
+│       ├── IVenueAuditService.cs
+│       ├── IVenueSubUserService.cs
+│       ├── VenueAuditService.cs
+│       └── VenueSubUserService.cs
+├── Tests
+│   ├── Integration
+│   │   └── GeocodingServiceTests.cs
+│   └── Unit
+│       └── GeocodingServiceUnitTests.cs
+├── appsettings.Development.json
+├── appsettings.json
+├── appsettings.Production.json
+├── CLEAN_ARCHITECTURE_DEVELOPER_GUIDELINES.md
+├── CLEAN_ARCHITECTURE_TRANSFORMATION_SUMMARY.md
+├── E7GEZLY API.csproj
+├── E7GEZLY API.csproj.Backup.tmp
+├── E7GEZLY API.csproj.user
+├── E7GEZLY API.http
+├── E7GEZLY-API-SOCIAL-AUTH-TEST.http
+├── E7GEZLY-API-TESTING.http
+├── Program.cs
+├── testsettings.json
+└── VALIDATION_CHECKLIST.md

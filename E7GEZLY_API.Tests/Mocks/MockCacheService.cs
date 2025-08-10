@@ -1,7 +1,6 @@
 ﻿// File: E7GEZLY_API.Tests/Mocks/MockCacheService.cs
 
 using E7GEZLY_API.Services.Cache;
-using E7GEZLY_API.Services.Caching;
 using System.Collections.Concurrent;
 
 namespace E7GEZLY_API.Tests.Mocks

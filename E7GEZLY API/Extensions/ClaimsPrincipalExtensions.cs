@@ -1,6 +1,7 @@
 ﻿// E7GEZLY API/Extensions/ClaimsPrincipalExtensions.cs
 using System.Security.Claims;
 using E7GEZLY_API.Models;
+using E7GEZLY_API.Domain.Enums;
 
 namespace E7GEZLY_API.Extensions
 {

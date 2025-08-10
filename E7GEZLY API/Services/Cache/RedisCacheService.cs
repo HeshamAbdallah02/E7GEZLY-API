@@ -38,11 +38,31 @@ namespace E7GEZLY_API.Services.Cache
         {
             try
             {
+                // Check connection health before operation
+                if (!_redis.IsConnected)
+                {
+                    _logger.LogWarning("Redis connection is not available for GET key: {Key}", key);
+                    return default;
+                }
+
+                using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                cts.CancelAfter(TimeSpan.FromSeconds(2)); // 2-second timeout
+
                 var value = await _database.StringGetAsync(BuildKey(key));
                 if (value.IsNullOrEmpty)
                     return default;
 
                 return JsonSerializer.Deserialize<T>(value!, _jsonOptions);
+            }
+            catch (OperationCanceledException)
+            {
+                _logger.LogWarning("Redis GET operation timed out for key: {Key}", key);
+                return default;
+            }
+            catch (RedisConnectionException ex)
+            {
+                _logger.LogWarning(ex, "Redis connection error getting cached value for key: {Key}", key);
+                return default;
             }
             catch (Exception ex)
             {
@@ -69,10 +89,29 @@ namespace E7GEZLY_API.Services.Cache
         {
             try
             {
+                // Check connection health before operation
+                if (!_redis.IsConnected)
+                {
+                    _logger.LogWarning("Redis connection is not available for SET key: {Key}", key);
+                    return;
+                }
+
+                using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                cts.CancelAfter(TimeSpan.FromSeconds(2)); // 2-second timeout
+
                 var json = JsonSerializer.Serialize(value, _jsonOptions);
                 var expire = expiration ?? TimeSpan.FromMinutes(_config.DefaultExpirationMinutes);
 
                 await _database.StringSetAsync(BuildKey(key), json, expire);
+                _logger.LogDebug("Successfully cached key: {Key}", key);
+            }
+            catch (OperationCanceledException)
+            {
+                _logger.LogWarning("Redis SET operation timed out for key: {Key}", key);
+            }
+            catch (RedisConnectionException ex)
+            {
+                _logger.LogWarning(ex, "Redis connection error setting cached value for key: {Key}", key);
             }
             catch (Exception ex)
             {

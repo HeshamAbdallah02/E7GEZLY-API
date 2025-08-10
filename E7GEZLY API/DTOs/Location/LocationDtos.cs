@@ -8,12 +8,14 @@ namespace E7GEZLY_API.DTOs.Location
         string NameAr
     );
 
-    public record DistrictDto(
-        int Id,
-        string NameEn,
-        string NameAr,
-        int GovernorateId
-    );
+    public record DistrictDto
+    {
+        public int Id { get; init; }
+        public string NameEn { get; init; } = string.Empty;
+        public string NameAr { get; init; } = string.Empty;
+        public int GovernorateId { get; init; }
+        public string GovernorateName { get; init; } = string.Empty;
+    }
 
     public record AddressDto
     {
@@ -47,10 +49,12 @@ namespace E7GEZLY_API.DTOs.Location
     }
 
     public record ValidateAddressDto(
-        string? Governorate,
-        string? District,
+        int? DistrictId,
         double? Latitude,
-        double? Longitude
+        double? Longitude,
+        string? StreetAddress,
+        string? District,
+        string? Governorate
     );
 
     public record AddressValidationResultDto(
@@ -58,4 +62,14 @@ namespace E7GEZLY_API.DTOs.Location
         string? Message,
         List<string>? Errors
     );
+
+    /// <summary>
+    /// Response for geocoding operations
+    /// </summary>
+    public record GeocodeResponseDto
+    {
+        public bool Success { get; init; }
+        public AddressResponseDto Data { get; init; } = null!;
+        public string Message { get; init; } = string.Empty;
+    }
 }

@@ -1,7 +1,9 @@
 // Update your Program.cs - Add minimal cache service registration
 
+using E7GEZLY_API.Application;
 using E7GEZLY_API.Data;
 using E7GEZLY_API.Extensions;
+using E7GEZLY_API.Infrastructure;
 using E7GEZLY_API.Middleware;
 using E7GEZLY_API.Services.BackgroundServices;
 
@@ -16,6 +18,8 @@ builder.Logging.AddDebug();
 
 // 1. Core infrastructure services first
 builder.Services.AddDatabase(builder.Configuration);
+builder.Services.AddInfrastructure(builder.Configuration.GetConnectionString("DefaultConnection")!);
+builder.Services.AddApplication(); // Add Application layer
 builder.Services.AddApplicationServices();
 builder.Services.AddIdentityServices();
 

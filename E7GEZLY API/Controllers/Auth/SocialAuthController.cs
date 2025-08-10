@@ -1,251 +1,208 @@
-﻿using E7GEZLY_API.Data;
+﻿// Controllers/Auth/SocialAuthController.cs
+using E7GEZLY_API.Application.Features.Authentication.Commands.SocialLogin;
+using E7GEZLY_API.Application.Features.Authentication.Commands.LinkSocialAccount;
+using E7GEZLY_API.Application.Features.Authentication.Commands.UnlinkSocialAccount;
+using E7GEZLY_API.Application.Features.Authentication.Queries.GetAvailableProviders;
+using E7GEZLY_API.Application.Features.Authentication.Queries.GetLinkedAccounts;
+using E7GEZLY_API.Attributes;
 using E7GEZLY_API.DTOs.Auth;
+using E7GEZLY_API.DTOs.Common;
 using E7GEZLY_API.Extensions;
-using E7GEZLY_API.Models;
-using E7GEZLY_API.Services.Auth;
-using E7GEZLY_API.Services.Location;
-using Microsoft.AspNetCore.Identity;
+using MediatR;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 
 namespace E7GEZLY_API.Controllers.Auth
 {
+    /// <summary>
+    /// Social Authentication Controller using Clean Architecture with CQRS/MediatR pattern
+    /// Handles social authentication operations through Application layer
+    /// </summary>
     [ApiController]
     [Route("api/auth/social")]
-    public class SocialAuthController : BaseAuthController
+    public class SocialAuthController : ControllerBase
     {
-        private readonly ISocialAuthService _socialAuthService;
+        private readonly IMediator _mediator;
+        private readonly ILogger<SocialAuthController> _logger;
 
-        public SocialAuthController(
-            UserManager<ApplicationUser> userManager,
-            SignInManager<ApplicationUser> signInManager,
-            ITokenService tokenService,
-            IVerificationService verificationService,
-            ILocationService locationService,
-            IGeocodingService geocodingService,
-            AppDbContext context,
-            ILogger<SocialAuthController> logger,
-            IWebHostEnvironment environment,
-            ISocialAuthService socialAuthService)
-            : base(userManager, signInManager, tokenService, verificationService, locationService, geocodingService, context, logger, environment)
+        public SocialAuthController(IMediator mediator, ILogger<SocialAuthController> logger)
         {
-            _socialAuthService = socialAuthService;
+            _mediator = mediator;
+            _logger = logger;
         }
 
+        /// <summary>
+        /// Get available social authentication providers
+        /// </summary>
         [HttpGet("providers")]
-        public IActionResult GetAvailableProviders()
+        public async Task<ActionResult<ApiResponse<AvailableProvidersDto>>> GetAvailableProviders()
         {
-            var userAgent = Request.Headers["User-Agent"].ToString();
-            var isAppleDevice = IsAppleDevice(userAgent);
-            var providers = _socialAuthService.GetAvailableProviders(isAppleDevice);
+            try
+            {
+                var userAgent = Request.Headers["User-Agent"].ToString();
+                
+                var query = new GetAvailableProvidersQuery
+                {
+                    UserAgent = userAgent
+                };
 
-            return Ok(new AvailableProvidersDto(providers, isAppleDevice));
+                var result = await _mediator.Send(query);
+
+                if (result.IsSuccess)
+                {
+                    return Ok(ApiResponse<AvailableProvidersDto>.CreateSuccess(result.Data!));
+                }
+
+                return BadRequest(ApiResponse<AvailableProvidersDto>.CreateError(result.ErrorMessage!));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting available providers");
+                return StatusCode(500, ApiResponse<AvailableProvidersDto>.CreateError("An error occurred while getting available providers"));
+            }
         }
 
         /// <summary>
         /// Social login for customers only. Venues must use manual registration.
         /// </summary>
-        
         [HttpPost("login")]
-        public async Task<IActionResult> SocialLogin([FromBody] SocialLoginDto dto)
+        [RateLimit(10, 600, "Social login rate limit exceeded. You can only attempt social login 10 times per 10 minutes.")]
+        public async Task<ActionResult<ApiResponse<AuthResponseDto>>> SocialLogin([FromBody] SocialLoginDto dto)
         {
             try
             {
-                // Validate provider
-                var userAgent = Request.Headers["User-Agent"].ToString();
-                var isAppleDevice = IsAppleDevice(userAgent);
-                var availableProviders = _socialAuthService.GetAvailableProviders(isAppleDevice);
-
-                if (!availableProviders.Contains(dto.Provider.ToLower()))
+                var command = new SocialLoginCommand
                 {
-                    return BadRequest(new { message = $"Provider {dto.Provider} is not available on this device" });
+                    Provider = dto.Provider,
+                    AccessToken = dto.AccessToken,
+                    DeviceName = dto.DeviceName,
+                    DeviceType = dto.DeviceType,
+                    UserAgent = dto.UserAgent ?? Request.Headers["User-Agent"].ToString(),
+                    IpAddress = dto.IpAddress ?? HttpContext.GetClientIpAddress()
+                };
+
+                var result = await _mediator.Send(command);
+
+                if (result.IsSuccess)
+                {
+                    _logger.LogInformation("Social login successful via {Provider}", dto.Provider);
+                    return Ok(ApiResponse<AuthResponseDto>.CreateSuccess(result.Data!));
                 }
 
-                // Validate token with provider
-                var providerUser = await _socialAuthService.ValidateProviderTokenAsync(dto.Provider, dto.AccessToken);
-                if (providerUser == null)
-                {
-                    return Unauthorized(new { message = "Invalid social media token" });
-                }
-
-                // Find or create user
-                var user = await _socialAuthService.FindOrCreateUserAsync(dto.Provider, providerUser);
-                if (user == null)
-                {
-                    return BadRequest(new { message = "Failed to create or find user account" });
-                }
-
-                // Check if user is active
-                if (!user.IsActive)
-                {
-                    return Unauthorized(new { message = "Account is deactivated" });
-                }
-
-                // Update last login for external login
-                await _socialAuthService.UpdateExternalLoginAsync(user, dto.Provider, providerUser.Id);
-
-                // Create session info
-                var sessionInfo = new CreateSessionDto(
-                    DeviceName: dto.DeviceName ?? $"{dto.Provider} Login",
-                    DeviceType: dto.DeviceType ?? "Unknown",
-                    UserAgent: dto.UserAgent ?? Request.Headers["User-Agent"].ToString(),
-                    IpAddress: dto.IpAddress ?? HttpContext.GetClientIpAddress()
-                );
-
-                // Generate tokens
-                var authResponse = await _tokenService.GenerateTokensAsync(user, sessionInfo);
-
-                _logger.LogInformation("Social login successful for user {UserId} via {Provider}", user.Id, dto.Provider);
-
-                return Ok(authResponse);
+                return BadRequest(ApiResponse<AuthResponseDto>.CreateError(result.ErrorMessage!));
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Social login error for provider {Provider}", dto.Provider);
-                return StatusCode(500, new { message = "An error occurred during social login" });
+                return StatusCode(500, ApiResponse<AuthResponseDto>.CreateError("An error occurred during social login"));
             }
         }
 
         /// <summary>
         /// Link social account to existing customer account
         /// </summary>
-
         [HttpPost("link")]
-        [Microsoft.AspNetCore.Authorization.Authorize]
-        public async Task<IActionResult> LinkSocialAccount([FromBody] SocialLoginDto dto)
+        [Authorize]
+        public async Task<ActionResult<ApiResponse<string>>> LinkSocialAccount([FromBody] SocialLoginDto dto)
         {
             try
             {
                 var userId = HttpContext.GetUserId();
                 if (string.IsNullOrEmpty(userId))
-                    return Unauthorized();
+                    return Unauthorized(ApiResponse<string>.CreateError("User not authenticated"));
 
-                var user = await _userManager.FindByIdAsync(userId);
-                if (user == null)
-                    return NotFound(new { message = "User not found" });
-
-                // Validate token
-                var providerUser = await _socialAuthService.ValidateProviderTokenAsync(dto.Provider, dto.AccessToken);
-                if (providerUser == null)
-                {
-                    return Unauthorized(new { message = "Invalid social media token" });
-                }
-
-                // Check if this social account is already linked to another user
-                var existingLogin = await _context.ExternalLogins
-                    .FirstOrDefaultAsync(e => e.Provider == dto.Provider && e.ProviderUserId == providerUser.Id);
-
-                if (existingLogin != null)
-                {
-                    if (existingLogin.UserId == userId)
-                    {
-                        return BadRequest(new { message = "This social account is already linked to your profile" });
-                    }
-                    return BadRequest(new { message = "This social account is already linked to another user" });
-                }
-
-                // Create external login
-                var externalLogin = new ExternalLogin
+                var command = new LinkSocialAccountCommand
                 {
                     UserId = userId,
                     Provider = dto.Provider,
-                    ProviderUserId = providerUser.Id,
-                    ProviderEmail = providerUser.Email,
-                    ProviderDisplayName = providerUser.Name,
-                    LastLoginAt = DateTime.UtcNow
+                    AccessToken = dto.AccessToken
                 };
 
-                _context.ExternalLogins.Add(externalLogin);
-                await _context.SaveChangesAsync();
+                var result = await _mediator.Send(command);
 
-                _logger.LogInformation("Linked {Provider} account to user {UserId}", dto.Provider, userId);
+                if (result.IsSuccess)
+                {
+                    _logger.LogInformation("Linked {Provider} account to user {UserId}", dto.Provider, userId);
+                    return Ok(ApiResponse<string>.CreateSuccess(result.Data!));
+                }
 
-                return Ok(new { message = $"{dto.Provider} account linked successfully" });
+                return BadRequest(ApiResponse<string>.CreateError(result.ErrorMessage!));
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error linking social account");
-                return StatusCode(500, new { message = "An error occurred while linking social account" });
+                return StatusCode(500, ApiResponse<string>.CreateError("An error occurred while linking social account"));
             }
         }
 
+        /// <summary>
+        /// Unlink social account from user account
+        /// </summary>
         [HttpDelete("unlink/{provider}")]
-        [Microsoft.AspNetCore.Authorization.Authorize]
-        public async Task<IActionResult> UnlinkSocialAccount(string provider)
+        [Authorize]
+        public async Task<ActionResult<ApiResponse<string>>> UnlinkSocialAccount(string provider)
         {
             try
             {
                 var userId = HttpContext.GetUserId();
                 if (string.IsNullOrEmpty(userId))
-                    return Unauthorized();
+                    return Unauthorized(ApiResponse<string>.CreateError("User not authenticated"));
 
-                var user = await _userManager.FindByIdAsync(userId);
-                if (user == null)
-                    return NotFound(new { message = "User not found" });
-
-                // Check if user has password (needed if unlinking last social account)
-                var hasPassword = await _userManager.HasPasswordAsync(user);
-                var socialLoginsCount = await _context.ExternalLogins
-                    .CountAsync(e => e.UserId == userId);
-
-                if (!hasPassword && socialLoginsCount <= 1)
+                var command = new UnlinkSocialAccountCommand
                 {
-                    return BadRequest(new { message = "Cannot unlink the last social account without setting a password first" });
+                    UserId = userId,
+                    Provider = provider
+                };
+
+                var result = await _mediator.Send(command);
+
+                if (result.IsSuccess)
+                {
+                    _logger.LogInformation("Unlinked {Provider} account from user {UserId}", provider, userId);
+                    return Ok(ApiResponse<string>.CreateSuccess(result.Data!));
                 }
 
-                var externalLogin = await _context.ExternalLogins
-                    .FirstOrDefaultAsync(e => e.UserId == userId && e.Provider == provider);
-
-                if (externalLogin == null)
-                {
-                    return NotFound(new { message = $"{provider} account is not linked" });
-                }
-
-                _context.ExternalLogins.Remove(externalLogin);
-                await _context.SaveChangesAsync();
-
-                _logger.LogInformation("Unlinked {Provider} account from user {UserId}", provider, userId);
-
-                return Ok(new { message = $"{provider} account unlinked successfully" });
+                return BadRequest(ApiResponse<string>.CreateError(result.ErrorMessage!));
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error unlinking social account");
-                return StatusCode(500, new { message = "An error occurred while unlinking social account" });
+                return StatusCode(500, ApiResponse<string>.CreateError("An error occurred while unlinking social account"));
             }
         }
 
+        /// <summary>
+        /// Get linked social accounts for current user
+        /// </summary>
         [HttpGet("linked-accounts")]
-        [Microsoft.AspNetCore.Authorization.Authorize]
-        public async Task<IActionResult> GetLinkedAccounts()
+        [Authorize]
+        public async Task<ActionResult<ApiResponse<LinkedAccountsResponseDto>>> GetLinkedAccounts()
         {
-            var userId = HttpContext.GetUserId();
-            if (string.IsNullOrEmpty(userId))
-                return Unauthorized();
+            try
+            {
+                var userId = HttpContext.GetUserId();
+                if (string.IsNullOrEmpty(userId))
+                    return Unauthorized(ApiResponse<LinkedAccountsResponseDto>.CreateError("User not authenticated"));
 
-            var linkedAccounts = await _context.ExternalLogins
-                .Where(e => e.UserId == userId)
-                .Select(e => new
+                var query = new GetLinkedAccountsQuery
                 {
-                    provider = e.Provider,
-                    email = e.ProviderEmail,
-                    displayName = e.ProviderDisplayName,
-                    linkedAt = e.CreatedAt,
-                    lastLoginAt = e.LastLoginAt
-                })
-                .ToListAsync();
+                    UserId = userId
+                };
 
-            return Ok(new { linkedAccounts });
-        }
+                var result = await _mediator.Send(query);
 
-        private bool IsAppleDevice(string userAgent)
-        {
-            if (string.IsNullOrEmpty(userAgent))
-                return false;
+                if (result.IsSuccess)
+                {
+                    return Ok(ApiResponse<LinkedAccountsResponseDto>.CreateSuccess(result.Data!));
+                }
 
-            var appleDeviceIdentifiers = new[] { "iPhone", "iPad", "Mac", "Darwin" };
-            return appleDeviceIdentifiers.Any(identifier =>
-                userAgent.Contains(identifier, StringComparison.OrdinalIgnoreCase));
+                return BadRequest(ApiResponse<LinkedAccountsResponseDto>.CreateError(result.ErrorMessage!));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting linked accounts");
+                return StatusCode(500, ApiResponse<LinkedAccountsResponseDto>.CreateError("An error occurred while getting linked accounts"));
+            }
         }
     }
 }

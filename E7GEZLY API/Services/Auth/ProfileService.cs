@@ -4,7 +4,8 @@ using E7GEZLY_API.DTOs.Customer;
 using E7GEZLY_API.DTOs.Location;
 using E7GEZLY_API.DTOs.User;
 using E7GEZLY_API.DTOs.Venue;
-using E7GEZLY_API.Models;
+using E7GEZLY_API.Domain.Entities;
+using ApplicationUser = E7GEZLY_API.Models.ApplicationUser;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
@@ -34,7 +35,6 @@ namespace E7GEZLY_API.Services.Auth
             var profile = await _context.CustomerProfiles
                 .Include(c => c.District)
                 .ThenInclude(d => d!.Governorate)
-                .Include(c => c.User)
                 .FirstOrDefaultAsync(c => c.UserId == userId);
 
             if (profile == null)
@@ -43,9 +43,17 @@ namespace E7GEZLY_API.Services.Auth
                 return null;
             }
 
+            // Get the user separately since domain entities don't have navigation properties
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.Id == profile.UserId);
+            if (user == null)
+            {
+                _logger.LogWarning($"User not found for customer profile: {profile.UserId}");
+                return null;
+            }
+
             return new CustomerProfileResponseDto(
                 "customer",
-                MapToUserInfo(profile.User),
+                MapToUserInfo(user),
                 MapToCustomerDetails(profile)
             );
         }
@@ -58,16 +66,28 @@ namespace E7GEZLY_API.Services.Auth
                 .ThenInclude(d => d!.Governorate)
                 .FirstOrDefaultAsync(u => u.Id == userId);
 
-            if (user?.VenueId == null || user.Venue == null)
+            if (user?.VenueId == null)
             {
                 _logger.LogWarning($"Venue profile not found for user: {userId}");
+                return null;
+            }
+
+            // Get the domain venue entity separately
+            var venue = await _context.Venues
+                .Include(v => v.District)
+                .ThenInclude(d => d!.Governorate)
+                .FirstOrDefaultAsync(v => v.Id == user.VenueId.Value);
+                
+            if (venue == null)
+            {
+                _logger.LogWarning($"Domain venue not found for venue ID: {user.VenueId}");
                 return null;
             }
 
             return new VenueProfileResponseDto(
                 "venue",
                 MapToUserInfo(user),
-                MapToVenueDetails(user.Venue)
+                MapToVenueDetails(venue)
             );
         }
 
@@ -134,9 +154,9 @@ namespace E7GEZLY_API.Services.Auth
         {
             return new CustomerDetailsDto(
                 profile.Id,
-                profile.FirstName,
-                profile.LastName,
-                profile.FullName,
+                profile.Name.FirstName,
+                profile.Name.LastName,
+                profile.Name.FullName,
                 profile.DateOfBirth,
                 MapCustomerAddressToResponse(profile)
             );
@@ -146,7 +166,7 @@ namespace E7GEZLY_API.Services.Auth
         {
             return new VenueDetailsDto(
                 venue.Id,
-                venue.Name,
+                venue.Name.Name,
                 venue.VenueType.ToString(),
                 (int)venue.VenueType,
                 venue.IsProfileComplete,
@@ -160,44 +180,43 @@ namespace E7GEZLY_API.Services.Auth
         {
             // Return null if no meaningful address data exists
             if (profile.District == null &&
-                string.IsNullOrWhiteSpace(profile.StreetAddress) &&
-                !profile.Latitude.HasValue &&
-                !profile.Longitude.HasValue)
+                string.IsNullOrWhiteSpace(profile.Address.StreetAddress) &&
+                profile.Address.Coordinates == null)
             {
                 return null;
             }
 
             return new AddressResponseDto(
-                profile.Latitude,
-                profile.Longitude,
-                profile.StreetAddress,
-                profile.Landmark,
+                profile.Address.Coordinates?.Latitude,
+                profile.Address.Coordinates?.Longitude,
+                profile.Address.StreetAddress,
+                profile.Address.Landmark,
                 profile.District?.NameEn,
                 profile.District?.NameAr,
                 profile.District?.Governorate?.NameEn,
                 profile.District?.Governorate?.NameAr,
-                profile.FullAddress
+                profile.GetFullAddress()
             );
         }
 
         private static AddressResponseDto? MapVenueAddressToResponse(Venue venue)
         {
             // Return null if no location data
-            if (!venue.Latitude.HasValue && !venue.Longitude.HasValue && venue.District == null)
+            if (venue.Address.Coordinates == null && venue.District == null)
             {
                 return null;
             }
 
             return new AddressResponseDto(
-                venue.Latitude,
-                venue.Longitude,
-                venue.StreetAddress,
-                venue.Landmark,
+                venue.Address.Coordinates?.Latitude,
+                venue.Address.Coordinates?.Longitude,
+                venue.Address.StreetAddress,
+                venue.Address.Landmark,
                 venue.District?.NameEn,
                 venue.District?.NameAr,
                 venue.District?.Governorate?.NameEn,
                 venue.District?.Governorate?.NameAr,
-                venue.FullAddress
+                venue.GetFullAddress()
             );
         }
 
@@ -225,12 +244,12 @@ namespace E7GEZLY_API.Services.Auth
     {
         public static bool HasCompleteAddress(this CustomerProfile profile)
         {
-            return profile.District != null || !string.IsNullOrWhiteSpace(profile.StreetAddress);
+            return profile.District != null || !string.IsNullOrWhiteSpace(profile.Address.StreetAddress);
         }
 
         public static bool HasCompleteLocation(this Venue venue)
         {
-            return venue.Latitude.HasValue && venue.Longitude.HasValue && venue.District != null;
+            return venue.Address.Coordinates != null && venue.District != null;
         }
     }
 }

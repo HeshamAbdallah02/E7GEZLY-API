@@ -1,9 +1,11 @@
 ﻿// Controllers/Auth/CustomerAuthController.cs
+using E7GEZLY_API.Attributes;
 using E7GEZLY_API.Data;
 using E7GEZLY_API.DTOs.Auth;
 using E7GEZLY_API.DTOs.Location;
 using E7GEZLY_API.Extensions;
-using E7GEZLY_API.Models;
+using E7GEZLY_API.Domain.Entities;
+using ApplicationUser = E7GEZLY_API.Models.ApplicationUser;
 using E7GEZLY_API.Services.Auth;
 using E7GEZLY_API.Services.Location;
 using Microsoft.AspNetCore.Identity;
@@ -31,6 +33,7 @@ namespace E7GEZLY_API.Controllers.Auth
         }
 
         [HttpPost("register")]
+        [RateLimit(3, 3600, "Registration rate limit exceeded. You can only register 3 accounts per hour.")]
         public async Task<IActionResult> RegisterCustomer(RegisterCustomerDto dto)
         {
             var transaction = await _context.Database.BeginTransactionAsync();
@@ -104,43 +107,37 @@ namespace E7GEZLY_API.Controllers.Auth
                     return StatusCode(500, new { message = "Error assigning user role", detail = ex.Message });
                 }
 
-                // Create customer profile
-                var profile = new CustomerProfile
+                // Find the district by name if provided
+                int? districtId = null;
+                if (dto.Address != null && !string.IsNullOrWhiteSpace(dto.Address.Governorate) &&
+                    !string.IsNullOrWhiteSpace(dto.Address.District))
                 {
-                    Id = Guid.NewGuid(),
-                    UserId = user.Id,
-                    FirstName = dto.FirstName,
-                    LastName = dto.LastName,
-                    DateOfBirth = dto.DateOfBirth,
-                    CreatedAt = DateTime.UtcNow
-                };
+                    var district = await _context.Districts
+                        .Include(d => d.Governorate)
+                        .FirstOrDefaultAsync(d =>
+                            (d.NameEn.ToLower() == dto.Address.District.ToLower() ||
+                             d.NameAr == dto.Address.District) &&
+                            (d.Governorate.NameEn.ToLower() == dto.Address.Governorate.ToLower() ||
+                             d.Governorate.NameAr == dto.Address.Governorate));
 
-                // Add address information if provided
-                if (dto.Address != null)
-                {
-                    // Find the district by name
-                    if (!string.IsNullOrWhiteSpace(dto.Address.Governorate) &&
-                        !string.IsNullOrWhiteSpace(dto.Address.District))
+                    if (district != null)
                     {
-                        var district = await _context.Districts
-                            .Include(d => d.Governorate)
-                            .FirstOrDefaultAsync(d =>
-                                (d.NameEn.ToLower() == dto.Address.District.ToLower() ||
-                                 d.NameAr == dto.Address.District) &&
-                                (d.Governorate.NameEn.ToLower() == dto.Address.Governorate.ToLower() ||
-                                 d.Governorate.NameAr == dto.Address.Governorate));
-
-                        if (district != null)
-                        {
-                            profile.DistrictId = district.Id;
-                        }
+                        districtId = district.Id;
                     }
-
-                    profile.StreetAddress = dto.Address.StreetAddress;
-                    profile.Latitude = dto.Address.Latitude;
-                    profile.Longitude = dto.Address.Longitude;
-                    profile.Landmark = dto.Address.Landmark;
                 }
+
+                // Create customer profile using factory method
+                var profile = CustomerProfile.Create(
+                    user.Id,
+                    dto.FirstName,
+                    dto.LastName,
+                    dto.DateOfBirth,
+                    dto.Address?.StreetAddress,
+                    dto.Address?.Landmark,
+                    dto.Address?.Latitude,
+                    dto.Address?.Longitude,
+                    districtId
+                );
 
                 try
                 {
@@ -197,7 +194,7 @@ namespace E7GEZLY_API.Controllers.Auth
                     {
                         await _verificationService.SendWelcomeEmailAsync(
                             user.Email,
-                            profile.FirstName,
+                            profile.Name.FirstName,
                             "Customer"
                         );
                     }
@@ -256,6 +253,7 @@ namespace E7GEZLY_API.Controllers.Auth
         }
 
         [HttpPost("login")]
+        [RateLimit(5, 300, "Login rate limit exceeded. Too many login attempts. Please wait 5 minutes.")]
         public async Task<IActionResult> CustomerLogin([FromBody] LoginDto dto)
         {
             try
@@ -323,20 +321,20 @@ namespace E7GEZLY_API.Controllers.Auth
                     profile = customerProfile != null ? new
                     {
                         id = customerProfile.Id,
-                        firstName = customerProfile.FirstName,
-                        lastName = customerProfile.LastName,
+                        firstName = customerProfile.Name.FirstName,
+                        lastName = customerProfile.Name.LastName,
                         dateOfBirth = customerProfile.DateOfBirth,
-                        fullAddress = customerProfile.FullAddress,
-                        location = customerProfile.DistrictId.HasValue ? new
+                        fullAddress = customerProfile.GetFullAddress(),
+                        location = customerProfile.DistrictSystemId.HasValue ? new
                         {
-                            districtId = customerProfile.DistrictId,
+                            districtId = customerProfile.DistrictSystemId,
                             districtName = customerProfile.District?.NameEn,
                             districtNameAr = customerProfile.District?.NameAr,
                             governorateId = customerProfile.District?.GovernorateId,
                             governorateName = customerProfile.District?.Governorate?.NameEn,
                             governorateNameAr = customerProfile.District?.Governorate?.NameAr,
-                            streetAddress = customerProfile.StreetAddress,
-                            landmark = customerProfile.Landmark
+                            streetAddress = customerProfile.Address.StreetAddress,
+                            landmark = customerProfile.Address.Landmark
                         } : null
                     } : null,
                     requiredActions = GetCustomerRequiredActions(user, customerProfile),
@@ -429,8 +427,8 @@ namespace E7GEZLY_API.Controllers.Auth
             else
             {
                 // Check for incomplete profile fields
-                if (string.IsNullOrWhiteSpace(profile.FirstName) ||
-                    string.IsNullOrWhiteSpace(profile.LastName))
+                if (string.IsNullOrWhiteSpace(profile.Name.FirstName) ||
+                    string.IsNullOrWhiteSpace(profile.Name.LastName))
                 {
                     actions.Add("COMPLETE_BASIC_INFO");
                 }
@@ -440,8 +438,8 @@ namespace E7GEZLY_API.Controllers.Auth
                     actions.Add("ADD_BIRTH_DATE");
                 }
 
-                if (!profile.DistrictId.HasValue ||
-                    string.IsNullOrWhiteSpace(profile.StreetAddress))
+                if (!profile.DistrictSystemId.HasValue ||
+                    string.IsNullOrWhiteSpace(profile.Address.StreetAddress))
                 {
                     actions.Add("ADD_ADDRESS");
                 }

@@ -1,6 +1,7 @@
 ﻿// E7GEZLY API/Attributes/RequireVenuePermissionAttribute.cs
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
+using E7GEZLY_API.Domain.Enums;
 using E7GEZLY_API.Models;
 using System.Security.Claims;
 

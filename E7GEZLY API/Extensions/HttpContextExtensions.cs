@@ -10,6 +10,18 @@ namespace E7GEZLY_API.Extensions
             return httpContext.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
         }
 
+        public static Guid? GetVenueId(this HttpContext httpContext)
+        {
+            try
+            {
+                return httpContext.User.GetVenueId();
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
         public static string? GetCurrentRefreshToken(this HttpContext httpContext)
         {
             // Try custom header first

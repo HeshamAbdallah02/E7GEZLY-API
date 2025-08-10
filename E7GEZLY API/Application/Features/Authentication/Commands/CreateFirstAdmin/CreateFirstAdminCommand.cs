@@ -1,4 +1,4 @@
-using E7GEZLY_API.Application.Common.Models;
+using E7GEZLY_API.Application.Common.Interfaces;
 using E7GEZLY_API.DTOs.Venue;
 using MediatR;
 
@@ -7,7 +7,7 @@ namespace E7GEZLY_API.Application.Features.Authentication.Commands.CreateFirstAd
     /// <summary>
     /// Command for creating the first admin sub-user after venue profile completion
     /// </summary>
-    public class CreateFirstAdminCommand : IRequest<ApplicationResult<CreateFirstAdminResponseDto>>
+    public class CreateFirstAdminCommand : IRequest<OperationResult<CreateFirstAdminResponseDto>>
     {
         public Guid VenueId { get; init; }
         public string Username { get; init; } = string.Empty;

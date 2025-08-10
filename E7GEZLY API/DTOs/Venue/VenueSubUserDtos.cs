@@ -30,7 +30,10 @@ namespace E7GEZLY_API.DTOs.Venue
         string Username,
 
         [Required]
-        string Password
+        string Password,
+
+        string? DeviceType = null,
+        string? IpAddress = null
     );
 
     /// <summary>

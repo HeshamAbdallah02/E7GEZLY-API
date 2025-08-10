@@ -18,6 +18,26 @@ using Microsoft.Extensions.Options;
 
 namespace E7GEZLY_API.Extensions
 {
+    /// <summary>
+    /// Service collection extensions for E7GEZLY API
+    /// 
+    /// NOTE: Clean Architecture Integration
+    /// ===================================
+    /// The E7GEZLY API has been transformed to use Clean Architecture with the following layers:
+    /// 
+    /// 1. Domain Layer: E7GEZLY_API.Domain - Contains business entities, value objects, and domain services
+    /// 2. Application Layer: E7GEZLY_API.Application - Contains use cases, commands, queries, and handlers
+    /// 3. Infrastructure Layer: E7GEZLY_API.Infrastructure - Contains repository implementations
+    /// 4. API Layer: Controllers use MediatR to communicate with Application layer
+    /// 
+    /// Service Registration Order (IMPORTANT):
+    /// 1. Infrastructure services (AddInfrastructure) - Database, repositories
+    /// 2. Application services (AddApplication) - MediatR, validators, behaviors
+    /// 3. Legacy application services (AddApplicationServices) - Existing services for compatibility
+    /// 4. All other services (Identity, caching, etc.)
+    /// 
+    /// For new features, use the Clean Architecture pattern by creating commands/queries in the Application layer.
+    /// </summary>
     public static class ServiceCollectionExtensions
     {
         public static IServiceCollection AddDatabase(this IServiceCollection services, IConfiguration configuration)
@@ -30,28 +50,29 @@ namespace E7GEZLY_API.Extensions
 
         public static IServiceCollection AddApplicationServices(this IServiceCollection services)
         {
+            // Legacy services - these should eventually be migrated to Clean Architecture patterns
+            // For now, keeping them for backwards compatibility with existing functionality
             services.AddScoped<ITokenService, TokenService>();
             services.AddScoped<IVerificationService, VerificationService>();
             services.AddScoped<ILocationService, LocationService>();
             services.AddScoped<IProfileService, ProfileService>();
-            services.AddScoped<IVenueProfileService, VenueProfileService>();
 
-            // Add memory cache
+            // Add memory cache for IMemoryCache interface
             services.AddMemoryCache();
 
-            // Register HTTP client for Nominatim
+            // Register HTTP client for Nominatim geocoding service
             services.AddHttpClient<NominatimGeocodingService>(client =>
             {
                 client.Timeout = TimeSpan.FromSeconds(30);
+                // Add User-Agent header to comply with Nominatim usage policy
+                client.DefaultRequestHeaders.Add("User-Agent", "E7GEZLY-API/1.0 (Egypt Venue Booking Platform)");
             });
 
-            // Register geocoding services with decoration pattern
+            // Register geocoding services
             services.AddScoped<NominatimGeocodingService>();
-
-            // Note: The geocoding service will be decorated with distributed caching 
-            // after Redis is configured in AddDistributedCaching
             services.AddScoped<IGeocodingService, NominatimGeocodingService>();
 
+            // Add HTTP context accessor for accessing user context in Application layer
             services.AddHttpContextAccessor();
 
             return services;
@@ -117,60 +138,125 @@ namespace E7GEZLY_API.Extensions
             // Add basic cache configuration
             services.Configure<CacheConfiguration>(configuration.GetSection("DistributedCache"));
 
-            // Try to add Redis, but fallback to in-memory if Redis fails
-            try
-            {
-                var cacheConfig = configuration.GetSection("DistributedCache").Get<CacheConfiguration>()
-                                 ?? new CacheConfiguration();
+            var cacheConfig = configuration.GetSection("DistributedCache").Get<CacheConfiguration>()
+                             ?? new CacheConfiguration();
 
-                if (!string.IsNullOrEmpty(cacheConfig.ConnectionString) && cacheConfig.ConnectionString != "localhost:6379")
+            // Determine if we should attempt Redis connection
+            var shouldUseRedis = ShouldAttemptRedisConnection(cacheConfig, configuration);
+
+            if (shouldUseRedis)
+            {
+                try
                 {
-                    // Only try Redis if connection string is explicitly configured and not default
-                    try
+                    // Add Redis with resilient configuration
+                    services.AddSingleton<IConnectionMultiplexer>(sp =>
                     {
-                        // Add Redis connection
-                        services.AddSingleton<IConnectionMultiplexer>(sp =>
+                        var logger = sp.GetRequiredService<ILogger<Program>>();
+
+                        try
                         {
                             var configOptions = ConfigurationOptions.Parse(cacheConfig.ConnectionString);
+
+                            // Resilient Redis configuration
                             configOptions.AbortOnConnectFail = false;
-                            configOptions.ConnectRetry = 3;
-                            configOptions.ConnectTimeout = 5000;
+                            configOptions.ConnectRetry = 2;
+                            configOptions.ConnectTimeout = 2000; // 2 seconds
+                            configOptions.SyncTimeout = 1000;    // 1 second
+                            configOptions.AsyncTimeout = 2000;   // 2 seconds
+                            configOptions.CommandMap = CommandMap.Create(new HashSet<string> { "INFO" }, available: false);
+                            configOptions.KeepAlive = 60;
 
-                            return ConnectionMultiplexer.Connect(configOptions);
-                        });
+                            var connection = ConnectionMultiplexer.Connect(configOptions);
 
-                        // Add Redis cache service
-                        services.AddSingleton<ICacheService, RedisCacheService>();
+                            // Test the connection immediately
+                            var database = connection.GetDatabase();
+                            database.Ping();
 
-                        // Log that Redis is being used
-                        var logger = services.BuildServiceProvider().GetService<ILogger<Program>>();
-                        logger?.LogInformation("Using Redis cache service");
-                    }
-                    catch
+                            logger.LogInformation("✅ Redis connection established successfully");
+                            return connection;
+                        }
+                        catch (Exception ex)
+                        {
+                            logger.LogWarning(ex, "❌ Failed to connect to Redis, will use in-memory cache");
+                            throw; // Let the outer catch handle the fallback
+                        }
+                    });
+
+                    // Register Redis cache service
+                    services.AddSingleton<ICacheService>(sp =>
                     {
-                        // If Redis setup fails, fallback to in-memory
-                        services.AddSingleton<ICacheService, InMemoryCacheService>();
+                        try
+                        {
+                            var redis = sp.GetRequiredService<IConnectionMultiplexer>();
+                            var config = sp.GetRequiredService<IOptions<CacheConfiguration>>();
+                            var logger = sp.GetRequiredService<ILogger<RedisCacheService>>();
 
-                        var logger = services.BuildServiceProvider().GetService<ILogger<Program>>();
-                        logger?.LogWarning("Redis setup failed, falling back to in-memory cache");
-                    }
+                            return new RedisCacheService(redis, config, logger);
+                        }
+                        catch
+                        {
+                            // Fallback to in-memory if Redis service creation fails
+                            var memoryCache = sp.GetRequiredService<IMemoryCache>();
+                            var logger = sp.GetRequiredService<ILogger<InMemoryCacheService>>();
+                            var fallbackLogger = sp.GetRequiredService<ILogger<Program>>();
+
+                            fallbackLogger.LogWarning("🔄 Falling back to in-memory cache due to Redis service creation failure");
+                            return new InMemoryCacheService(memoryCache, logger);
+                        }
+                    });
                 }
-                else
+                catch
                 {
-                    // Use in-memory cache by default
-                    services.AddSingleton<ICacheService, InMemoryCacheService>();
-
-                    var logger = services.BuildServiceProvider().GetService<ILogger<Program>>();
-                    logger?.LogInformation("Using in-memory cache service (development mode)");
+                    // If Redis setup fails completely, register in-memory cache
+                    RegisterInMemoryCache(services);
                 }
             }
-            catch (Exception)
+            else
             {
-                // If anything fails, use in-memory cache
-                services.AddSingleton<ICacheService, InMemoryCacheService>();
+                // Use in-memory cache directly
+                RegisterInMemoryCache(services);
             }
 
             return services;
+        }
+
+        private static bool ShouldAttemptRedisConnection(CacheConfiguration cacheConfig, IConfiguration configuration)
+        {
+            // Don't attempt Redis if:
+            // 1. Connection string is null/empty
+            // 2. Connection string is default localhost and we're in development
+            // 3. Explicitly disabled via environment variable
+
+            if (string.IsNullOrWhiteSpace(cacheConfig?.ConnectionString))
+                return false;
+
+            if (Environment.GetEnvironmentVariable("DISABLE_REDIS") == "true")
+                return false;
+
+            // Check if it's a real Redis configuration or just localhost default
+            var connectionString = cacheConfig.ConnectionString.ToLower();
+            var isDevelopment = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") == "Development";
+
+            if (isDevelopment && connectionString.Contains("localhost:6379"))
+            {
+                // In development, only use Redis if explicitly configured differently
+                return connectionString != "localhost:6379" && connectionString != "localhost:6379,abortconnect=false";
+            }
+
+            return true;
+        }
+
+        private static void RegisterInMemoryCache(IServiceCollection services)
+        {
+            services.AddSingleton<ICacheService>(sp =>
+            {
+                var memoryCache = sp.GetRequiredService<IMemoryCache>();
+                var logger = sp.GetRequiredService<ILogger<InMemoryCacheService>>();
+                var programLogger = sp.GetRequiredService<ILogger<Program>>();
+
+                programLogger.LogInformation("🧠 Using in-memory cache service");
+                return new InMemoryCacheService(memoryCache, logger);
+            });
         }
     }
 }

@@ -157,14 +157,13 @@ namespace E7GEZLY_API.Application.Features.VenueProfile.Commands.CompletePlaySta
 
             foreach (var wh in workingHours)
             {
-                var workingHour = new VenueWorkingHours
-                {
-                    VenueId = venue.Id,
-                    DayOfWeek = wh.DayOfWeek,
-                    IsClosed = wh.IsClosed,
-                    OpenTime = wh.OpenTime ?? TimeSpan.Zero,
-                    CloseTime = wh.CloseTime ?? TimeSpan.Zero
-                };
+                var workingHour = Domain.Entities.VenueWorkingHours.Create(
+                    venue.Id,
+                    wh.DayOfWeek,
+                    wh.OpenTime ?? TimeSpan.Zero,
+                    wh.CloseTime ?? TimeSpan.Zero,
+                    wh.IsClosed
+                );
 
                 _context.VenueWorkingHours.Add(workingHour);
             }
@@ -181,17 +180,18 @@ namespace E7GEZLY_API.Application.Features.VenueProfile.Commands.CompletePlaySta
                 _context.VenuePlayStationDetails.Remove(existingDetails);
             }
 
-            _context.VenuePlayStationDetails.Add(new VenuePlayStationDetails
-            {
-                VenueId = venue.Id,
-                NumberOfRooms = request.NumberOfRooms,
-                HasPS4 = request.HasPS4,
-                HasPS5 = request.HasPS5,
-                HasVIPRooms = request.HasVIPRooms,
-                HasCafe = request.HasCafe,
-                HasWiFi = request.HasWiFi,
-                ShowsMatches = request.ShowsMatches
-            });
+            var playStationDetails = Domain.Entities.VenuePlayStationDetails.Create(
+                venue.Id,
+                request.NumberOfRooms,
+                request.HasPS4,
+                request.HasPS5,
+                request.HasVIPRooms,
+                request.HasCafe,
+                request.HasWiFi,
+                request.ShowsMatches
+            );
+
+            _context.VenuePlayStationDetails.Add(playStationDetails);
         }
 
         private async Task AddPlayStationPricingAsync(Venue venue, CompletePlayStationProfileCommand request)
@@ -233,53 +233,53 @@ namespace E7GEZLY_API.Application.Features.VenueProfile.Commands.CompletePlaySta
             // Classic room pricing
             if (pricing.ClassicRooms != null)
             {
-                _context.VenuePricing.Add(new VenuePricing
-                {
-                    VenueId = venue.Id,
-                    Type = PricingType.PlayStation,
-                    PlayStationModel = model,
-                    RoomType = RoomType.Classic,
-                    GameMode = GameMode.Single,
-                    Price = pricing.ClassicRooms.SingleModeHourPrice,
-                    Description = $"{model} Classic Single Mode"
-                });
+                var classicSinglePricing = Domain.Entities.VenuePricing.Create(
+                    venue.Id,
+                    PricingType.PlayStation,
+                    pricing.ClassicRooms.SingleModeHourPrice,
+                    $"{model} Classic Single Mode",
+                    model,
+                    RoomType.Classic,
+                    GameMode.Single
+                );
+                _context.VenuePricing.Add(classicSinglePricing);
 
-                _context.VenuePricing.Add(new VenuePricing
-                {
-                    VenueId = venue.Id,
-                    Type = PricingType.PlayStation,
-                    PlayStationModel = model,
-                    RoomType = RoomType.Classic,
-                    GameMode = GameMode.Multiplayer,
-                    Price = pricing.ClassicRooms.MultiplayerModeHourPrice,
-                    Description = $"{model} Classic Multiplayer Mode"
-                });
+                var classicMultiPricing = Domain.Entities.VenuePricing.Create(
+                    venue.Id,
+                    PricingType.PlayStation,
+                    pricing.ClassicRooms.MultiplayerModeHourPrice,
+                    $"{model} Classic Multiplayer Mode",
+                    model,
+                    RoomType.Classic,
+                    GameMode.Multiplayer
+                );
+                _context.VenuePricing.Add(classicMultiPricing);
             }
 
             // VIP room pricing
             if (hasVIP && pricing.VIPRooms != null)
             {
-                _context.VenuePricing.Add(new VenuePricing
-                {
-                    VenueId = venue.Id,
-                    Type = PricingType.PlayStation,
-                    PlayStationModel = model,
-                    RoomType = RoomType.VIP,
-                    GameMode = GameMode.Single,
-                    Price = pricing.VIPRooms.SingleModeHourPrice,
-                    Description = $"{model} VIP Single Mode"
-                });
+                var vipSinglePricing = Domain.Entities.VenuePricing.Create(
+                    venue.Id,
+                    PricingType.PlayStation,
+                    pricing.VIPRooms.SingleModeHourPrice,
+                    $"{model} VIP Single Mode",
+                    model,
+                    RoomType.VIP,
+                    GameMode.Single
+                );
+                _context.VenuePricing.Add(vipSinglePricing);
 
-                _context.VenuePricing.Add(new VenuePricing
-                {
-                    VenueId = venue.Id,
-                    Type = PricingType.PlayStation,
-                    PlayStationModel = model,
-                    RoomType = RoomType.VIP,
-                    GameMode = GameMode.Multiplayer,
-                    Price = pricing.VIPRooms.MultiplayerModeHourPrice,
-                    Description = $"{model} VIP Multiplayer Mode"
-                });
+                var vipMultiPricing = Domain.Entities.VenuePricing.Create(
+                    venue.Id,
+                    PricingType.PlayStation,
+                    pricing.VIPRooms.MultiplayerModeHourPrice,
+                    $"{model} VIP Multiplayer Mode",
+                    model,
+                    RoomType.VIP,
+                    GameMode.Multiplayer
+                );
+                _context.VenuePricing.Add(vipMultiPricing);
             }
         }
 
@@ -288,13 +288,14 @@ namespace E7GEZLY_API.Application.Features.VenueProfile.Commands.CompletePlaySta
             var order = 0;
             foreach (var url in imageUrls)
             {
-                _context.VenueImages.Add(new VenueImage
-                {
-                    VenueId = venue.Id,
-                    ImageUrl = url,
-                    DisplayOrder = order++,
-                    IsPrimary = order == 1
-                });
+                var venueImage = Domain.Entities.VenueImage.Create(
+                    venue.Id,
+                    url,
+                    caption: null,
+                    displayOrder: order++,
+                    isPrimary: order == 1
+                );
+                _context.VenueImages.Add(venueImage);
             }
         }
 

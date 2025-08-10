@@ -12,6 +12,12 @@ namespace E7GEZLY_API.Services.Auth
         // New method for refresh token with session tracking
         Task<AuthResponseDto?> RefreshTokensAsync(string refreshToken, string? ipAddress = null);
 
+        // Token validation method
+        Task<bool> ValidateTokenAsync(string token);
+        
+        // Token validation method that returns claims principal
+        Task<System.Security.Claims.ClaimsPrincipal?> GetClaimsPrincipalFromTokenAsync(string token);
+
         // Keep existing method
         string GenerateRefreshToken();
 

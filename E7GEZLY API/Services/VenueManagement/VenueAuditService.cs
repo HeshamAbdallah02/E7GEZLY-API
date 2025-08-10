@@ -3,7 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using E7GEZLY_API.Data;
 using E7GEZLY_API.DTOs.Venue;
 using E7GEZLY_API.DTOs.Common;
-using E7GEZLY_API.Models;
+using E7GEZLY_API.Domain.Entities;
 using System.Text.Json;
 
 namespace E7GEZLY_API.Services.VenueManagement
@@ -31,20 +31,18 @@ namespace E7GEZLY_API.Services.VenueManagement
         {
             try
             {
-                var auditLog = new VenueAuditLog
-                {
-                    VenueId = dto.VenueId,
-                    SubUserId = dto.SubUserId,
-                    Action = dto.Action,
-                    EntityType = dto.EntityType,
-                    EntityId = dto.EntityId,
-                    OldValues = dto.OldValues != null ? JsonSerializer.Serialize(dto.OldValues) : null,
-                    NewValues = dto.NewValues != null ? JsonSerializer.Serialize(dto.NewValues) : null,
-                    AdditionalData = dto.AdditionalData != null ? JsonSerializer.Serialize(dto.AdditionalData) : null,
-                    Timestamp = DateTime.UtcNow,
-                    IpAddress = GetClientIpAddress(),
-                    UserAgent = GetUserAgent()
-                };
+                var auditLog = VenueAuditLog.Create(
+                    dto.VenueId,
+                    dto.Action,
+                    dto.EntityType,
+                    dto.EntityId,
+                    dto.OldValues != null ? JsonSerializer.Serialize(dto.OldValues) : null,
+                    dto.NewValues != null ? JsonSerializer.Serialize(dto.NewValues) : null,
+                    dto.SubUserId,
+                    GetClientIpAddress(),
+                    GetUserAgent(),
+                    dto.AdditionalData != null ? JsonSerializer.Serialize(dto.AdditionalData) : null
+                );
 
                 _context.VenueAuditLogs.Add(auditLog);
                 await _context.SaveChangesAsync();
@@ -58,6 +56,56 @@ namespace E7GEZLY_API.Services.VenueManagement
                 _logger.LogError(ex,
                     "Failed to create audit log for action {Action} on {EntityType} {EntityId}",
                     dto.Action, dto.EntityType, dto.EntityId);
+
+                // Don't throw - audit logging failures shouldn't break business operations
+            }
+        }
+
+        public async Task LogVenueActionAsync(
+            Guid venueId,
+            string userId,
+            string action,
+            string description,
+            object? additionalData = null)
+        {
+            try
+            {
+                // Try to parse userId as SubUser GUID, otherwise use as regular user ID
+                Guid? subUserId = null;
+                if (Guid.TryParse(userId, out var parsedGuid))
+                {
+                    subUserId = parsedGuid;
+                }
+
+                var serializedData = additionalData != null 
+                    ? JsonSerializer.Serialize(new { Description = description, Data = additionalData }) 
+                    : JsonSerializer.Serialize(new { Description = description });
+
+                var auditLog = VenueAuditLog.Create(
+                    venueId,
+                    action,
+                    "General",
+                    venueId.ToString(),
+                    null, // oldValues
+                    null, // newValues  
+                    subUserId,
+                    GetClientIpAddress(),
+                    GetUserAgent(),
+                    serializedData
+                );
+
+                _context.VenueAuditLogs.Add(auditLog);
+                await _context.SaveChangesAsync();
+
+                _logger.LogInformation(
+                    "Venue audit log created: {Action} for venue {VenueId} by user {UserId}",
+                    action, venueId, userId);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex,
+                    "Failed to create venue audit log for action {Action} on venue {VenueId}",
+                    action, venueId);
 
                 // Don't throw - audit logging failures shouldn't break business operations
             }
@@ -107,7 +155,7 @@ namespace E7GEZLY_API.Services.VenueManagement
                 .Take(query.PageSize)
                 .ToListAsync();
 
-            var dtos = logs.Select(MapToResponseDto);
+            var dtos = logs.Select(log => MapToResponseDto(log));
 
             return dtos.ToPagedResult(totalCount, query.Page, query.PageSize);
         }

@@ -5,7 +5,8 @@ using System.Security.Cryptography;
 using System.Text;
 using E7GEZLY_API.Data;
 using E7GEZLY_API.DTOs.Auth;
-using E7GEZLY_API.Models;
+using E7GEZLY_API.Domain.Entities;
+using ApplicationUser = E7GEZLY_API.Models.ApplicationUser;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -63,11 +64,11 @@ namespace E7GEZLY_API.Services.Auth
                 if (venue != null)
                 {
                     claims.Add(new Claim("venueId", venue.Id.ToString()));
-                    claims.Add(new Claim("venueName", venue.Name));
+                    claims.Add(new Claim("venueName", venue.Name.Value));
                     claims.Add(new Claim("venueType", venue.VenueType.ToString()));
 
                     userInfo["venueId"] = venue.Id.ToString();
-                    userInfo["venueName"] = venue.Name;
+                    userInfo["venueName"] = venue.Name.Value;
                     userInfo["venueType"] = venue.VenueType.ToString();
                     userInfo["userType"] = "Venue";
                 }
@@ -80,10 +81,10 @@ namespace E7GEZLY_API.Services.Auth
                 if (profile != null)
                 {
                     claims.Add(new Claim("customerId", profile.Id.ToString()));
-                    claims.Add(new Claim("fullName", profile.FullName));
+                    claims.Add(new Claim("fullName", profile.Name.FullName));
 
                     userInfo["customerId"] = profile.Id.ToString();
-                    userInfo["fullName"] = profile.FullName;
+                    userInfo["fullName"] = profile.Name.FullName;
                     userInfo["userType"] = "Customer";
                 }
             }
@@ -93,21 +94,15 @@ namespace E7GEZLY_API.Services.Auth
             var refreshToken = GenerateRefreshToken();
 
             // Create session instead of updating user
-            var session = new UserSession
-            {
-                Id = Guid.NewGuid(),
-                UserId = user.Id,
-                RefreshToken = refreshToken,
-                RefreshTokenExpiry = DateTime.UtcNow.AddDays(30),
-                DeviceName = sessionInfo?.DeviceName ?? "Unknown Device",
-                DeviceType = sessionInfo?.DeviceType ?? "Unknown",
-                UserAgent = sessionInfo?.UserAgent,
-                IpAddress = sessionInfo?.IpAddress,
-                LastActivityAt = DateTime.UtcNow,
-                IsActive = true,
-                CreatedAt = DateTime.UtcNow,
-                UpdatedAt = DateTime.UtcNow
-            };
+            var session = UserSession.Create(
+                user.Id,
+                refreshToken,
+                DateTime.UtcNow.AddDays(30),
+                sessionInfo?.DeviceName ?? "Unknown Device",
+                sessionInfo?.DeviceType ?? "Unknown",
+                sessionInfo?.UserAgent,
+                sessionInfo?.IpAddress
+            );
 
             _context.UserSessions.Add(session);
             await _context.SaveChangesAsync();
@@ -127,32 +122,11 @@ namespace E7GEZLY_API.Services.Auth
             var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
             var expires = DateTime.UtcNow.AddHours(4);
 
-            // Get the current host dynamically
-            string issuer;
-            string audience;
+            // Use secure, fixed issuer and audience from configuration
+            var issuer = _configuration["Jwt:Issuer"] ?? throw new InvalidOperationException("JWT Issuer not configured");
+            var audience = _configuration["Jwt:Audience"] ?? issuer;
 
-            var httpContext = _httpContextAccessor.HttpContext;
-            if (httpContext != null)
-            {
-                // Use the current request's host as issuer/audience
-                var request = httpContext.Request;
-                var host = request.Host.Value;
-                var scheme = request.Scheme;
-
-                // Build the full URL
-                issuer = $"{scheme}://{host}";
-                audience = issuer;
-
-                _logger.LogDebug("Generating token with dynamic issuer: {Issuer}", issuer);
-            }
-            else
-            {
-                // Fall back to configuration (e.g., for background services)
-                issuer = _configuration["Jwt:Issuer"] ?? "https://localhost:5001";
-                audience = _configuration["Jwt:Audience"] ?? issuer;
-
-                _logger.LogDebug("Generating token with configured issuer: {Issuer}", issuer);
-            }
+            _logger.LogDebug("Generating token with secure issuer: {Issuer}", issuer);
 
             var token = new JwtSecurityToken(
                 issuer: issuer,
@@ -177,7 +151,6 @@ namespace E7GEZLY_API.Services.Auth
         public async Task<AuthResponseDto?> RefreshTokensAsync(string refreshToken, string? ipAddress = null)
         {
             var session = await _context.UserSessions
-                .Include(s => s.User)
                 .FirstOrDefaultAsync(s => s.RefreshToken == refreshToken &&
                                         s.RefreshTokenExpiry > DateTime.UtcNow &&
                                         s.IsActive);
@@ -185,24 +158,22 @@ namespace E7GEZLY_API.Services.Auth
             if (session == null)
                 return null;
 
-            if (!session.User.IsActive)
+            // Get the user separately since domain entities don't have navigation properties
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.Id == session.UserId);
+            if (user == null || !user.IsActive)
             {
                 // Deactivate session if user is inactive
-                session.IsActive = false;
+                session.Deactivate();
                 await _context.SaveChangesAsync();
                 return null;
             }
 
             // Update session activity
-            session.LastActivityAt = DateTime.UtcNow;
-            if (!string.IsNullOrEmpty(ipAddress))
-                session.IpAddress = ipAddress;
+            session.UpdateActivity();
 
             // Generate new tokens
             var newRefreshToken = GenerateRefreshToken();
-            session.RefreshToken = newRefreshToken;
-            session.RefreshTokenExpiry = DateTime.UtcNow.AddDays(30);
-            session.UpdatedAt = DateTime.UtcNow;
+            session.UpdateRefreshToken(newRefreshToken, DateTime.UtcNow.AddDays(30));
 
             await _context.SaveChangesAsync();
 
@@ -214,7 +185,63 @@ namespace E7GEZLY_API.Services.Auth
                 session.IpAddress
             );
 
-            return await GenerateTokensAsync(session.User, sessionInfo);
+            return await GenerateTokensAsync(user, sessionInfo);
+        }
+
+        public async Task<bool> ValidateTokenAsync(string token)
+        {
+            try
+            {
+                var tokenHandler = new JwtSecurityTokenHandler();
+                var key = Encoding.UTF8.GetBytes(_configuration["Jwt:Key"]!);
+                
+                var validationParameters = new TokenValidationParameters
+                {
+                    ValidateIssuerSigningKey = true,
+                    IssuerSigningKey = new SymmetricSecurityKey(key),
+                    ValidateIssuer = true,
+                    ValidIssuer = _configuration["Jwt:Issuer"],
+                    ValidateAudience = true,
+                    ValidAudience = _configuration["Jwt:Audience"],
+                    ValidateLifetime = true,
+                    ClockSkew = TimeSpan.Zero
+                };
+
+                var principal = tokenHandler.ValidateToken(token, validationParameters, out SecurityToken validatedToken);
+                return validatedToken != null;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        public async Task<ClaimsPrincipal?> GetClaimsPrincipalFromTokenAsync(string token)
+        {
+            try
+            {
+                var tokenHandler = new JwtSecurityTokenHandler();
+                var key = Encoding.UTF8.GetBytes(_configuration["Jwt:Key"]!);
+                
+                var validationParameters = new TokenValidationParameters
+                {
+                    ValidateIssuerSigningKey = true,
+                    IssuerSigningKey = new SymmetricSecurityKey(key),
+                    ValidateIssuer = true,
+                    ValidIssuer = _configuration["Jwt:Issuer"],
+                    ValidateAudience = true,
+                    ValidAudience = _configuration["Jwt:Audience"],
+                    ValidateLifetime = false, // We'll handle lifetime validation separately
+                    ClockSkew = TimeSpan.Zero
+                };
+
+                var principal = tokenHandler.ValidateToken(token, validationParameters, out SecurityToken validatedToken);
+                return principal;
+            }
+            catch
+            {
+                return null;
+            }
         }
 
         // Implement RevokeTokenAsync
@@ -226,8 +253,7 @@ namespace E7GEZLY_API.Services.Auth
             if (session == null)
                 return false;
 
-            session.IsActive = false;
-            session.UpdatedAt = DateTime.UtcNow;
+            session.Deactivate();
 
             await _context.SaveChangesAsync();
             return true;
@@ -245,8 +271,7 @@ namespace E7GEZLY_API.Services.Auth
 
             foreach (var session in sessions)
             {
-                session.IsActive = false;
-                session.UpdatedAt = DateTime.UtcNow;
+                session.Deactivate();
             }
 
             await _context.SaveChangesAsync();
@@ -262,8 +287,7 @@ namespace E7GEZLY_API.Services.Auth
             if (session == null)
                 return false;
 
-            session.IsActive = false;
-            session.UpdatedAt = DateTime.UtcNow;
+            session.Deactivate();
 
             await _context.SaveChangesAsync();
             return true;

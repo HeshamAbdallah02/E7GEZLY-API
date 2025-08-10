@@ -6,6 +6,7 @@ using E7GEZLY_API.Domain.Services;
 using E7GEZLY_API.DTOs.Location;
 using E7GEZLY_API.DTOs.Venue;
 using E7GEZLY_API.Models;
+using DomainEntities = E7GEZLY_API.Domain.Entities;
 using MediatR;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -147,18 +148,17 @@ namespace E7GEZLY_API.Application.Features.VenueProfile.Commands.CompleteCourtPr
 
             foreach (var wh in workingHours)
             {
-                var workingHour = new VenueWorkingHours
-                {
-                    VenueId = venue.Id,
-                    DayOfWeek = wh.DayOfWeek,
-                    IsClosed = wh.IsClosed,
-                    OpenTime = wh.OpenTime ?? TimeSpan.Zero,
-                    CloseTime = wh.CloseTime ?? TimeSpan.Zero,
-                    MorningStartTime = !wh.IsClosed ? request.MorningStartTime : null,
-                    MorningEndTime = !wh.IsClosed ? request.MorningEndTime : null,
-                    EveningStartTime = !wh.IsClosed ? request.EveningStartTime : null,
-                    EveningEndTime = !wh.IsClosed ? request.EveningEndTime : null
-                };
+                var workingHour = Domain.Entities.VenueWorkingHours.Create(
+                    venue.Id,
+                    wh.DayOfWeek,
+                    wh.OpenTime ?? TimeSpan.Zero,
+                    wh.CloseTime ?? TimeSpan.Zero,
+                    wh.IsClosed,
+                    !wh.IsClosed ? request.MorningStartTime : null,
+                    !wh.IsClosed ? request.MorningEndTime : null,
+                    !wh.IsClosed ? request.EveningStartTime : null,
+                    !wh.IsClosed ? request.EveningEndTime : null
+                );
 
                 _context.VenueWorkingHours.Add(workingHour);
             }
@@ -173,27 +173,33 @@ namespace E7GEZLY_API.Application.Features.VenueProfile.Commands.CompleteCourtPr
                 _context.VenuePricing.Remove(existing);
             }
 
-            // Morning price
-            _context.VenuePricing.Add(new VenuePricing
-            {
-                VenueId = venue.Id,
-                Type = PricingType.MorningHour,
-                Price = request.MorningHourPrice,
-                TimeSlotType = TimeSlotType.Morning,
-                DepositPercentage = request.DepositPercentage,
-                Description = "Morning hour rate"
-            });
+            // Morning price - Create Domain Entity
+            var morningPricing = Domain.Entities.VenuePricing.Create(
+                venue.Id,
+                PricingType.MorningHour,
+                request.MorningHourPrice,
+                "Morning hour rate",
+                psModel: null,
+                roomType: null,
+                gameMode: null,
+                timeSlotType: TimeSlotType.Morning,
+                depositPercentage: request.DepositPercentage
+            );
+            _context.VenuePricing.Add(morningPricing);
 
-            // Evening price
-            _context.VenuePricing.Add(new VenuePricing
-            {
-                VenueId = venue.Id,
-                Type = PricingType.EveningHour,
-                Price = request.EveningHourPrice,
-                TimeSlotType = TimeSlotType.Evening,
-                DepositPercentage = request.DepositPercentage,
-                Description = "Evening hour rate"
-            });
+            // Evening price - Create Domain Entity
+            var eveningPricing = Domain.Entities.VenuePricing.Create(
+                venue.Id,
+                PricingType.EveningHour,
+                request.EveningHourPrice,
+                "Evening hour rate",
+                psModel: null,
+                roomType: null,
+                gameMode: null,
+                timeSlotType: TimeSlotType.Evening,
+                depositPercentage: request.DepositPercentage
+            );
+            _context.VenuePricing.Add(eveningPricing);
         }
 
         private async Task AddVenueImagesAsync(Venue venue, List<string> imageUrls)
@@ -201,13 +207,14 @@ namespace E7GEZLY_API.Application.Features.VenueProfile.Commands.CompleteCourtPr
             var order = 0;
             foreach (var url in imageUrls)
             {
-                _context.VenueImages.Add(new VenueImage
-                {
-                    VenueId = venue.Id,
-                    ImageUrl = url,
-                    DisplayOrder = order++,
-                    IsPrimary = order == 1
-                });
+                var venueImage = Domain.Entities.VenueImage.Create(
+                    venue.Id,
+                    url,
+                    caption: null,
+                    displayOrder: order++,
+                    isPrimary: order == 1
+                );
+                _context.VenueImages.Add(venueImage);
             }
         }
 

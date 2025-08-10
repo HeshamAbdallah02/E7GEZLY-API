@@ -7,7 +7,12 @@ namespace E7GEZLY_API.Models
     {
         public Guid? VenueId { get; set; }
         public DateTime CreatedAt { get; set; }
+        public DateTime UpdatedAt { get; set; }
         public bool IsActive { get; set; } = true;
+        public DateTime? LastLoginAt { get; set; }
+        
+        // Add missing UserType property that repositories expect
+        public UserType UserType { get; set; }
 
         // Verification - Phone
         public bool IsPhoneNumberVerified { get; set; } = false;
@@ -37,7 +42,20 @@ namespace E7GEZLY_API.Models
         // Rate limiting
         public DateTime? LastPasswordResetRequest { get; set; }
 
+        // Generic password reset properties for backward compatibility
+        public string? PasswordResetCode { get; set; }
+        public DateTime? PasswordResetCodeExpiry { get; set; }
+
         // Social Logins
         public virtual ICollection<ExternalLogin> ExternalLogins { get; set; } = new List<ExternalLogin>();
+    }
+
+    /// <summary>
+    /// User types in the E7GEZLY system - matches domain enum
+    /// </summary>
+    public enum UserType
+    {
+        Venue = 0,
+        Customer = 1
     }
 }

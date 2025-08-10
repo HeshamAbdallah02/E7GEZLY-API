@@ -1,6 +1,8 @@
 ﻿using E7GEZLY_API.Data;
 using E7GEZLY_API.DTOs.Auth;
-using E7GEZLY_API.Models;
+using E7GEZLY_API.Domain.Entities;
+using EfExternalLogin = E7GEZLY_API.Models.ExternalLogin;
+using ApplicationUser = E7GEZLY_API.Models.ApplicationUser;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using System.Net.Http.Headers;
@@ -97,35 +99,143 @@ namespace E7GEZLY_API.Services.Auth
             );
         }
 
-        private Task<SocialUserInfoDto?> ValidateAppleTokenAsync(string identityToken)
+        private async Task<SocialUserInfoDto?> ValidateAppleTokenAsync(string identityToken)
         {
-            // Apple Sign In validation is more complex - this is a simplified version
-            // In production, you'd validate the JWT signature with Apple's public keys
             try
             {
+                var httpClient = _httpClientFactory.CreateClient();
+                
+                // Get Apple's public keys
+                var keysResponse = await httpClient.GetAsync("https://appleid.apple.com/auth/keys");
+                if (!keysResponse.IsSuccessStatusCode)
+                {
+                    _logger.LogError("Failed to retrieve Apple's public keys");
+                    return null;
+                }
+
+                var keysJson = await keysResponse.Content.ReadAsStringAsync();
+                var keysDoc = JsonDocument.Parse(keysJson);
+                
                 var handler = new System.IdentityModel.Tokens.Jwt.JwtSecurityTokenHandler();
                 var jsonToken = handler.ReadJwtToken(identityToken);
+                
+                // Get the key ID from token header
+                var keyId = jsonToken.Header.Kid;
+                if (string.IsNullOrEmpty(keyId))
+                {
+                    _logger.LogError("Apple JWT token missing 'kid' header");
+                    return null;
+                }
 
-                var userId = jsonToken.Claims.FirstOrDefault(x => x.Type == "sub")?.Value;
-                var email = jsonToken.Claims.FirstOrDefault(x => x.Type == "email")?.Value;
+                // Find the matching public key
+                var key = FindApplePublicKey(keysDoc, keyId);
+                if (key == null)
+                {
+                    _logger.LogError("No matching Apple public key found for kid: {KeyId}", keyId);
+                    return null;
+                }
 
-                if (string.IsNullOrEmpty(userId))
-                    return Task.FromResult<SocialUserInfoDto?>(null);
+                // Validate token signature and claims
+                var validationParameters = new Microsoft.IdentityModel.Tokens.TokenValidationParameters
+                {
+                    ValidateIssuerSigningKey = true,
+                    IssuerSigningKey = key,
+                    ValidateIssuer = true,
+                    ValidIssuer = "https://appleid.apple.com",
+                    ValidateAudience = true,
+                    ValidAudience = _configuration["Authentication:Apple:ClientId"], // Your Apple app's bundle ID
+                    ValidateLifetime = true,
+                    ClockSkew = TimeSpan.FromMinutes(5)
+                };
 
-                var result = new SocialUserInfoDto(
-                    Id: userId,
-                    Email: email,
-                    Name: null, // Apple doesn't always provide name
-                    FirstName: null,
-                    LastName: null,
-                    Picture: null
-                );
+                try
+                {
+                    var claimsPrincipal = handler.ValidateToken(identityToken, validationParameters, out var validatedToken);
+                    
+                    var userId = jsonToken.Claims.FirstOrDefault(x => x.Type == "sub")?.Value;
+                    var email = jsonToken.Claims.FirstOrDefault(x => x.Type == "email")?.Value;
+                    
+                    // Additional Apple-specific validation
+                    var audience = jsonToken.Claims.FirstOrDefault(x => x.Type == "aud")?.Value;
+                    var issuer = jsonToken.Claims.FirstOrDefault(x => x.Type == "iss")?.Value;
+                    
+                    if (issuer != "https://appleid.apple.com")
+                    {
+                        _logger.LogError("Invalid Apple token issuer: {Issuer}", issuer);
+                        return null;
+                    }
 
-                return Task.FromResult<SocialUserInfoDto?>(result);
+                    if (string.IsNullOrEmpty(userId))
+                    {
+                        _logger.LogError("Apple token missing user ID");
+                        return null;
+                    }
+
+                    _logger.LogInformation("Apple token validated successfully for user: {UserId}", userId);
+
+                    return new SocialUserInfoDto(
+                        Id: userId,
+                        Email: email,
+                        Name: null, // Apple doesn't always provide name in JWT
+                        FirstName: null,
+                        LastName: null,
+                        Picture: null
+                    );
+                }
+                catch (Microsoft.IdentityModel.Tokens.SecurityTokenValidationException ex)
+                {
+                    _logger.LogError(ex, "Apple token validation failed");
+                    return null;
+                }
             }
-            catch
+            catch (Exception ex)
             {
-                return Task.FromResult<SocialUserInfoDto?>(null);
+                _logger.LogError(ex, "Error validating Apple identity token");
+                return null;
+            }
+        }
+
+        private Microsoft.IdentityModel.Tokens.SecurityKey? FindApplePublicKey(JsonDocument keysDoc, string keyId)
+        {
+            try
+            {
+                var keys = keysDoc.RootElement.GetProperty("keys");
+                
+                foreach (var keyElement in keys.EnumerateArray())
+                {
+                    if (keyElement.TryGetProperty("kid", out var kidProperty) && 
+                        kidProperty.GetString() == keyId)
+                    {
+                        // Extract RSA parameters
+                        var n = keyElement.GetProperty("n").GetString(); // Modulus
+                        var e = keyElement.GetProperty("e").GetString(); // Exponent
+                        
+                        if (string.IsNullOrEmpty(n) || string.IsNullOrEmpty(e))
+                            continue;
+                            
+                        // Convert base64url to RSA parameters
+                        var modulus = Microsoft.IdentityModel.Tokens.Base64UrlEncoder.DecodeBytes(n);
+                        var exponent = Microsoft.IdentityModel.Tokens.Base64UrlEncoder.DecodeBytes(e);
+                        
+                        var rsaParameters = new System.Security.Cryptography.RSAParameters
+                        {
+                            Modulus = modulus,
+                            Exponent = exponent
+                        };
+                        
+                        var rsa = System.Security.Cryptography.RSA.Create();
+                        rsa.ImportParameters(rsaParameters);
+                        
+                        return new Microsoft.IdentityModel.Tokens.RsaSecurityKey(rsa);
+                    }
+                }
+                
+                return null;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error parsing Apple public key");
+                return null;
             }
         }
 
@@ -133,13 +243,16 @@ namespace E7GEZLY_API.Services.Auth
         {
             // First, check if external login exists
             var externalLogin = await _context.ExternalLogins
-                .Include(e => e.User)
                 .FirstOrDefaultAsync(e => e.Provider == provider && e.ProviderUserId == providerUser.Id);
 
             if (externalLogin != null)
             {
                 _logger.LogInformation("Found existing user via external login: {UserId}", externalLogin.UserId);
-                return externalLogin.User;
+                
+                // Get the user separately since domain entities don't have navigation properties
+                var existingUser = await _context.Users
+                    .FirstOrDefaultAsync(u => u.Id == externalLogin.UserId);
+                return existingUser;
             }
 
             // If email provided, check if user exists with that email
@@ -192,13 +305,11 @@ namespace E7GEZLY_API.Services.Auth
             }
 
             // Create customer profile
-            var customerProfile = new CustomerProfile
-            {
-                UserId = user.Id,
-                FirstName = firstName,
-                LastName = lastName,
-                CreatedAt = DateTime.UtcNow
-            };
+            var customerProfile = CustomerProfile.Create(
+                user.Id,
+                firstName,
+                lastName
+            );
             _context.CustomerProfiles.Add(customerProfile);
 
             // Create external login record
@@ -231,15 +342,13 @@ namespace E7GEZLY_API.Services.Auth
 
         private void CreateExternalLogin(ApplicationUser user, string provider, SocialUserInfoDto providerUser)
         {
-            var externalLogin = new ExternalLogin
-            {
-                UserId = user.Id,
-                Provider = provider,
-                ProviderUserId = providerUser.Id,
-                ProviderEmail = providerUser.Email,
-                ProviderDisplayName = providerUser.Name,
-                LastLoginAt = DateTime.UtcNow
-            };
+            var externalLogin = ExternalLogin.Create(
+                user.Id,
+                provider,
+                providerUser.Id,
+                providerUser.Email,
+                providerUser.Name
+            );
 
             _context.ExternalLogins.Add(externalLogin);
         }
@@ -251,8 +360,7 @@ namespace E7GEZLY_API.Services.Auth
 
             if (externalLogin != null)
             {
-                externalLogin.LastLoginAt = DateTime.UtcNow;
-                externalLogin.UpdatedAt = DateTime.UtcNow;
+                externalLogin.RecordLogin();
             }
         }
 

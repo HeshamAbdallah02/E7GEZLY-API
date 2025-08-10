@@ -1,176 +1,158 @@
-﻿// Controllers/Venue/VenueProfileController.cs
+using E7GEZLY_API.Application.Features.VenueProfile.Commands.CompleteProfile;
+using E7GEZLY_API.Application.Features.VenueProfile.Queries.GetVenueProfile;
+using E7GEZLY_API.Application.Features.VenueProfile.Queries.IsProfileComplete;
+using E7GEZLY_API.Attributes;
+using E7GEZLY_API.DTOs.Common;
 using E7GEZLY_API.DTOs.Venue;
-using E7GEZLY_API.Models;
-using E7GEZLY_API.Services.VenueManagement;
+using E7GEZLY_API.Extensions;
+using MediatR;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 
 namespace E7GEZLY_API.Controllers.VenueManagement
 {
     /// <summary>
-    /// Controller for venue profile management
+    /// Venue Profile Controller using Clean Architecture with CQRS/MediatR pattern
+    /// Handles venue profile management operations through Application layer
     /// </summary>
     [ApiController]
     [Route("api/venue/profile")]
-    [Authorize(Roles = "VenueAdmin")]
+    [Authorize]
+    [RequireVenueGateway]
     public class VenueProfileController : ControllerBase
     {
-        private readonly IVenueProfileService _venueProfileService;
-        private readonly UserManager<ApplicationUser> _userManager;
+        private readonly IMediator _mediator;
         private readonly ILogger<VenueProfileController> _logger;
 
-        public VenueProfileController(
-            IVenueProfileService venueProfileService,
-            UserManager<ApplicationUser> userManager,
-            ILogger<VenueProfileController> logger)
+        public VenueProfileController(IMediator mediator, ILogger<VenueProfileController> logger)
         {
-            _venueProfileService = venueProfileService;
-            _userManager = userManager;
+            _mediator = mediator;
             _logger = logger;
         }
 
         /// <summary>
-        /// Complete profile for court venues (Football/Padel)
+        /// Get venue profile information
         /// </summary>
-        [HttpPost("complete/court")]
-        public async Task<IActionResult> CompleteCourtProfile(
-           [FromBody] CompleteCourtProfileDto dto)
+        [HttpGet]
+        public async Task<ActionResult<ApiResponse<VenueProfileDto>>> GetVenueProfile()
         {
             try
             {
-                var userId = _userManager.GetUserId(User);
-                if (string.IsNullOrEmpty(userId))
-                    return Unauthorized(new { message = "User not authenticated" });
-
-                // Validate venue type
-                var validType = await _venueProfileService.ValidateVenueTypeAsync(
-                    userId, VenueType.FootballCourt) ||
-                    await _venueProfileService.ValidateVenueTypeAsync(
-                        userId, VenueType.PadelCourt);
-
-                if (!validType)
+                var venueId = HttpContext.GetVenueId();
+                if (!venueId.HasValue)
                 {
-                    return BadRequest(new
-                    {
-                        message = "This endpoint is only for Football or Padel court venues"
-                    });
+                    return BadRequest(ApiResponse<VenueProfileDto>.CreateError("Venue ID not found in token"));
                 }
 
-                var result = await _venueProfileService.CompleteCourtProfileAsync(userId, dto);
-                return Ok(result);
-            }
-            catch (InvalidOperationException ex)
-            {
-                _logger.LogWarning(ex, "Invalid operation during court profile completion");
+                var query = new GetVenueProfileQuery { VenueId = venueId.Value };
+                var result = await _mediator.Send(query);
 
-                // Check for specific error message
-                if (ex.Message.Contains("already complete"))
+                if (result.IsSuccess)
                 {
-                    return BadRequest(new
-                    {
-                        error = "PROFILE_ALREADY_COMPLETE",
-                        message = ex.Message,
-                        suggestion = "Use PUT /api/venue/profile/update/court to update an existing profile"
-                    });
+                    return Ok(ApiResponse<VenueProfileDto>.CreateSuccess(result.Data!));
                 }
 
-                return BadRequest(new { message = ex.Message });
+                return BadRequest(ApiResponse<VenueProfileDto>.CreateError(result.ErrorMessage!));
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error completing court profile");
-                return StatusCode(500, new { message = "An error occurred while completing the profile" });
+                _logger.LogError(ex, "Error getting venue profile");
+                return StatusCode(500, ApiResponse<VenueProfileDto>.CreateError("An error occurred while retrieving the venue profile"));
             }
         }
 
         /// <summary>
-        /// Complete profile for PlayStation venues
+        /// Complete venue profile (Clean Architecture approach)
         /// </summary>
-        [HttpPost("complete/playstation")]
-        public async Task<IActionResult> CompletePlayStationProfile(
-            [FromBody] CompletePlayStationProfileDto dto)
+        [HttpPost("complete")]
+        public async Task<ActionResult<ApiResponse<VenueProfileCompletionResponseDto>>> CompleteProfile([FromBody] CompleteVenueProfileRequest request)
         {
             try
             {
-                var userId = _userManager.GetUserId(User);
-                if (string.IsNullOrEmpty(userId))
-                    return Unauthorized(new { message = "User not authenticated" });
-
-                // Validate venue type
-                var validType = await _venueProfileService.ValidateVenueTypeAsync(
-                    userId, VenueType.PlayStationVenue);
-
-                if (!validType)
+                var venueId = HttpContext.GetVenueId();
+                if (!venueId.HasValue)
                 {
-                    return BadRequest(new
-                    {
-                        message = "This endpoint is only for PlayStation venues"
-                    });
+                    return BadRequest(ApiResponse<VenueProfileCompletionResponseDto>.CreateError("Venue ID not found in token"));
                 }
 
-                var result = await _venueProfileService.CompletePlayStationProfileAsync(userId, dto);
-                return Ok(result);
-            }
-            catch (InvalidOperationException ex)
-            {
-                _logger.LogWarning(ex, "Invalid operation during PlayStation profile completion");
-
-                // Check for specific error message
-                if (ex.Message.Contains("already complete"))
+                var command = new CompleteVenueProfileCommand
                 {
-                    return BadRequest(new
-                    {
-                        error = "PROFILE_ALREADY_COMPLETE",
-                        message = ex.Message,
-                        suggestion = "Use PUT /api/venue/profile/update/playstation to update an existing profile"
-                    });
+                    VenueId = venueId.Value,
+                    StreetAddress = request.StreetAddress,
+                    Landmark = request.Landmark,
+                    DistrictId = request.DistrictId,
+                    Latitude = request.Latitude,
+                    Longitude = request.Longitude,
+                    Description = request.Description,
+                    WorkingHours = request.WorkingHours,
+                    Pricing = request.Pricing,
+                    ImageUrls = request.ImageUrls,
+                    PlayStationDetails = request.PlayStationDetails
+                };
+
+                var result = await _mediator.Send(command);
+
+                if (result.IsSuccess)
+                {
+                    _logger.LogInformation("Venue profile completed successfully for venue {VenueId}", venueId.Value);
+                    return Ok(ApiResponse<VenueProfileCompletionResponseDto>.CreateSuccess(result.Data!));
                 }
 
-                return BadRequest(new { message = ex.Message });
+                return BadRequest(ApiResponse<VenueProfileCompletionResponseDto>.CreateError(result.ErrorMessage!));
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error completing PlayStation profile");
-                return StatusCode(500, new { message = "An error occurred while completing the profile" });
+                _logger.LogError(ex, "Error completing venue profile");
+                return StatusCode(500, ApiResponse<VenueProfileCompletionResponseDto>.CreateError("An error occurred while completing the profile"));
             }
         }
 
         /// <summary>
-        /// Get venue profile completion status
+        /// Check if venue profile is complete
         /// </summary>
-        [HttpGet("status")]
-        public async Task<IActionResult> GetProfileStatus()
+        [HttpGet("is-complete")]
+        public async Task<ActionResult<ApiResponse<bool>>> IsProfileComplete()
         {
             try
             {
-                var userId = _userManager.GetUserId(User);
-                if (string.IsNullOrEmpty(userId))
-                    return Unauthorized(new { message = "User not authenticated" });
-
-                var user = await _userManager.Users
-                    .Include(u => u.Venue)
-                    .FirstOrDefaultAsync(u => u.Id == userId);
-
-                if (user?.VenueId == null)
-                    return NotFound(new { message = "Venue not found" });
-
-                var isComplete = await _venueProfileService.IsVenueProfileCompleteAsync(
-                    user.VenueId.Value);
-
-                return Ok(new
+                var venueId = HttpContext.GetVenueId();
+                if (!venueId.HasValue)
                 {
-                    venueId = user.VenueId,
-                    isProfileComplete = isComplete,
-                    venueType = user.Venue?.VenueType.ToString()
-                });
+                    return BadRequest(ApiResponse<bool>.CreateError("Venue ID not found in token"));
+                }
+
+                var query = new IsProfileCompleteQuery { VenueId = venueId.Value };
+                var result = await _mediator.Send(query);
+
+                if (result.IsSuccess)
+                {
+                    return Ok(ApiResponse<ProfileCompletionStatusDto>.CreateSuccess(result.Data));
+                }
+
+                return BadRequest(ApiResponse<ProfileCompletionStatusDto>.CreateError(result.ErrorMessage!));
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error getting profile status");
-                return StatusCode(500, new { message = "An error occurred" });
+                _logger.LogError(ex, "Error checking profile completion status");
+                return StatusCode(500, ApiResponse<bool>.CreateError("An error occurred while checking profile completion status"));
             }
         }
+    }
+
+    /// <summary>
+    /// Request DTO for completing venue profile
+    /// </summary>
+    public class CompleteVenueProfileRequest
+    {
+        public string StreetAddress { get; set; } = string.Empty;
+        public string? Landmark { get; set; }
+        public int DistrictId { get; set; }
+        public double Latitude { get; set; }
+        public double Longitude { get; set; }
+        public string? Description { get; set; }
+        public List<VenueWorkingHoursDto> WorkingHours { get; set; } = new();
+        public List<VenuePricingDto> Pricing { get; set; } = new();
+        public List<string> ImageUrls { get; set; } = new();
+        public VenuePlayStationDetailsDto? PlayStationDetails { get; set; }
     }
 }

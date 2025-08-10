@@ -1,9 +1,11 @@
 ﻿// E7GEZLY API/Services/VenueManagement/VenueSubUserService.cs
 using E7GEZLY_API.Data;
+using E7GEZLY_API.Domain.Enums;
 using E7GEZLY_API.DTOs.Auth;
 using E7GEZLY_API.DTOs.Venue;
 using E7GEZLY_API.Exceptions;
-using E7GEZLY_API.Models;
+using E7GEZLY_API.Infrastructure.Mappings;
+using E7GEZLY_API.Domain.Entities;
 using E7GEZLY_API.Services.Auth;
 using E7GEZLY_API.Services.Cache;
 using Microsoft.AspNetCore.Identity;
@@ -65,18 +67,14 @@ namespace E7GEZLY_API.Services.VenueManagement
             var result = _passwordHasher.VerifyHashedPassword(subUser, subUser.PasswordHash, dto.Password);
             if (result == PasswordVerificationResult.Failed)
             {
-                // Increment failed attempts
-                subUser.FailedLoginAttempts++;
-                if (subUser.FailedLoginAttempts >= 5)
-                {
-                    subUser.LockoutEnd = DateTime.UtcNow.AddMinutes(15);
-                }
+                // Use domain method to record failed attempt
+                subUser.RecordFailedLoginAttempt(maxAttempts: 5, lockoutDuration: TimeSpan.FromMinutes(15));
                 await _context.SaveChangesAsync();
                 throw new UnauthorizedAccessException("Invalid credentials");
             }
 
-            // Check lockout
-            if (subUser.LockoutEnd.HasValue && subUser.LockoutEnd > DateTime.UtcNow)
+            // Check lockout using domain method
+            if (subUser.IsLockedOut())
             {
                 throw new UnauthorizedAccessException("Account is temporarily locked");
             }
@@ -87,10 +85,8 @@ namespace E7GEZLY_API.Services.VenueManagement
                 throw new UnauthorizedAccessException("Account is deactivated");
             }
 
-            // Reset failed attempts
-            subUser.FailedLoginAttempts = 0;
-            subUser.LockoutEnd = null;
-            subUser.LastLoginAt = DateTime.UtcNow;
+            // Use domain method to record successful login
+            subUser.RecordSuccessfulLogin(deviceType: dto.DeviceType, ipAddress: dto.IpAddress);
 
             await _context.SaveChangesAsync();
 
@@ -101,17 +97,16 @@ namespace E7GEZLY_API.Services.VenueManagement
             var accessToken = GenerateSubUserAccessToken(subUser, venueId, jti);
             var refreshToken = GenerateRefreshToken();
 
-            var session = new VenueSubUserSession
-            {
-                SubUserId = subUser.Id,
-                RefreshToken = refreshToken,
-                RefreshTokenExpiry = DateTime.UtcNow.AddDays(30),
-                DeviceName = "Sub-User Session",
-                DeviceType = "Unknown",
-                IsActive = true,
-                LastActivityAt = DateTime.UtcNow,
-                AccessTokenJti = jti // ← STORE THE JTI
-            };
+            var session = VenueSubUserSession.Create(
+                subUser.Id,
+                refreshToken, 
+                DateTime.UtcNow.AddDays(30),
+                "Sub-User Session",
+                "Unknown",
+                dto.IpAddress,
+                null, // userAgent
+                jti
+            );
 
             _context.VenueSubUserSessions.Add(session);
             await _context.SaveChangesAsync();
@@ -155,20 +150,36 @@ namespace E7GEZLY_API.Services.VenueManagement
                 throw new InvalidOperationException("Username already exists in this venue");
             }
 
-            var subUser = new VenueSubUser
+            // Hash password before creating domain entity
+            // Create temporary instance for hashing - this is a infrastructure concern
+            var tempSubUser = Domain.Entities.VenueSubUser.CreateFounderAdmin(venueId, "temp", "temp");
+            var hashedPassword = _passwordHasher.HashPassword(tempSubUser, dto.Password);
+            
+            // Create domain entity using factory method
+            Domain.Entities.VenueSubUser domainSubUser;
+            if (createdBySubUserId.HasValue)
             {
-                VenueId = venueId,
-                Username = dto.Username,
-                Role = dto.Role,
-                Permissions = dto.Permissions ?? GetDefaultPermissions(dto.Role),
-                CreatedBySubUserId = createdBySubUserId,
-                MustChangePassword = true
-            };
-
-            // Hash password
-            subUser.PasswordHash = _passwordHasher.HashPassword(subUser, dto.Password);
-
-            _context.VenueSubUsers.Add(subUser);
+                domainSubUser = Domain.Entities.VenueSubUser.Create(
+                    venueId, 
+                    dto.Username, 
+                    hashedPassword, 
+                    dto.Role, 
+                    dto.Permissions ?? GetDefaultPermissions(dto.Role), 
+                    createdBySubUserId.Value);
+            }
+            else
+            {
+                domainSubUser = Domain.Entities.VenueSubUser.CreateFounderAdmin(
+                    venueId,
+                    dto.Username, 
+                    hashedPassword);
+            }
+            
+            // Set must change password after creation
+            domainSubUser.SetMustChangePassword(true);
+            
+            // Add domain entity directly to context
+            _context.VenueSubUsers.Add(domainSubUser);
             await _context.SaveChangesAsync();
 
             // Log creation
@@ -177,16 +188,16 @@ namespace E7GEZLY_API.Services.VenueManagement
                 createdBySubUserId,
                 VenueAuditActions.SubUserCreated,
                 "VenueSubUser",
-                subUser.Id.ToString(),
+                domainSubUser.Id.ToString(),
                 NewValues: new
                 {
-                    Username = subUser.Username,
-                    Role = subUser.Role.ToString(),
-                    Permissions = subUser.Permissions.ToString()
+                    Username = domainSubUser.Username,
+                    Role = domainSubUser.Role.ToString(),
+                    Permissions = domainSubUser.Permissions.ToString()
                 }
             ));
 
-            return MapToResponseDto(subUser);
+            return MapToResponseDto(domainSubUser);
         }
 
         public async Task<VenueSubUserResponseDto> UpdateSubUserAsync(
@@ -194,26 +205,31 @@ namespace E7GEZLY_API.Services.VenueManagement
             Guid subUserId,
             UpdateVenueSubUserDto dto)
         {
-            var subUser = await GetSubUserEntityAsync(venueId, subUserId);
+            var domainSubUser = await GetSubUserEntityAsync(venueId, subUserId);
 
             var oldValues = new
             {
-                Role = subUser.Role.ToString(),
-                Permissions = subUser.Permissions.ToString(),
-                IsActive = subUser.IsActive
+                Role = domainSubUser.Role.ToString(),
+                Permissions = domainSubUser.Permissions.ToString(),
+                IsActive = domainSubUser.IsActive
             };
 
+            // Use domain methods for proper encapsulation
             if (dto.Role.HasValue)
-                subUser.Role = dto.Role.Value;
+                domainSubUser.UpdateRole(dto.Role.Value);
 
             if (dto.Permissions.HasValue)
-                subUser.Permissions = dto.Permissions.Value;
+                domainSubUser.UpdatePermissions(dto.Permissions.Value);
 
             if (dto.IsActive.HasValue)
-                subUser.IsActive = dto.IsActive.Value;
+            {
+                if (dto.IsActive.Value)
+                    domainSubUser.Activate();
+                else
+                    domainSubUser.Deactivate();
+            }
 
-            subUser.UpdatedAt = DateTime.UtcNow;
-
+            // EF Core will automatically track changes to the Domain entity
             await _context.SaveChangesAsync();
 
             // Clear cached permissions
@@ -221,9 +237,9 @@ namespace E7GEZLY_API.Services.VenueManagement
 
             var newValues = new
             {
-                Role = subUser.Role.ToString(),
-                Permissions = subUser.Permissions.ToString(),
-                IsActive = subUser.IsActive
+                Role = domainSubUser.Role.ToString(),
+                Permissions = domainSubUser.Permissions.ToString(),
+                IsActive = domainSubUser.IsActive
             };
 
             // Log update
@@ -232,12 +248,12 @@ namespace E7GEZLY_API.Services.VenueManagement
                 subUserId,
                 VenueAuditActions.SubUserUpdated,
                 "VenueSubUser",
-                subUser.Id.ToString(),
+                domainSubUser.Id.ToString(),
                 OldValues: oldValues,
                 NewValues: newValues
             ));
 
-            return MapToResponseDto(subUser);
+            return MapToResponseDto(domainSubUser);
         }
 
         public async Task DeleteSubUserAsync(
@@ -278,12 +294,12 @@ namespace E7GEZLY_API.Services.VenueManagement
             Guid subUserId,
             ChangeSubUserPasswordDto dto)
         {
-            var subUser = await GetSubUserEntityAsync(venueId, subUserId);
+            var domainSubUser = await GetSubUserEntityAsync(venueId, subUserId);
 
             // Verify current password
             var result = _passwordHasher.VerifyHashedPassword(
-                subUser,
-                subUser.PasswordHash,
+                domainSubUser,
+                domainSubUser.PasswordHash,
                 dto.CurrentPassword);
 
             if (result == PasswordVerificationResult.Failed)
@@ -291,12 +307,11 @@ namespace E7GEZLY_API.Services.VenueManagement
                 throw new UnauthorizedAccessException("Current password is incorrect");
             }
 
-            // Update password
-            subUser.PasswordHash = _passwordHasher.HashPassword(subUser, dto.NewPassword);
-            subUser.PasswordChangedAt = DateTime.UtcNow;
-            subUser.MustChangePassword = false;
-            subUser.UpdatedAt = DateTime.UtcNow;
-
+            // Use domain method to change password
+            var hashedPassword = _passwordHasher.HashPassword(domainSubUser, dto.NewPassword);
+            domainSubUser.ChangePassword(hashedPassword);
+            
+            // EF Core will automatically track changes to the Domain entity
             await _context.SaveChangesAsync();
 
             // Log password change
@@ -305,10 +320,10 @@ namespace E7GEZLY_API.Services.VenueManagement
                 subUserId,
                 VenueAuditActions.SubUserPasswordChanged,
                 "VenueSubUser",
-                subUser.Id.ToString()
+                domainSubUser.Id.ToString()
             ));
 
-            return MapToResponseDto(subUser);
+            return MapToResponseDto(domainSubUser);
         }
 
         public async Task<VenueSubUserResponseDto> ResetPasswordAsync(
@@ -317,13 +332,12 @@ namespace E7GEZLY_API.Services.VenueManagement
             Guid resetBySubUserId,
             ResetSubUserPasswordDto dto)
         {
-            var subUser = await GetSubUserEntityAsync(venueId, subUserId);
+            var domainSubUser = await GetSubUserEntityAsync(venueId, subUserId);
 
-            // Update password
-            subUser.PasswordHash = _passwordHasher.HashPassword(subUser, dto.NewPassword);
-            subUser.PasswordChangedAt = DateTime.UtcNow;
-            subUser.MustChangePassword = dto.MustChangePassword;
-            subUser.UpdatedAt = DateTime.UtcNow;
+            // Use domain method for password reset
+            var hashedPassword = _passwordHasher.HashPassword(domainSubUser, dto.NewPassword);
+            domainSubUser.ChangePassword(hashedPassword, isReset: true);
+            domainSubUser.SetMustChangePassword(dto.MustChangePassword);
 
             await _context.SaveChangesAsync();
 
@@ -333,11 +347,11 @@ namespace E7GEZLY_API.Services.VenueManagement
                 resetBySubUserId,
                 VenueAuditActions.SubUserPasswordReset,
                 "VenueSubUser",
-                subUser.Id.ToString(),
+                domainSubUser.Id.ToString(),
                 AdditionalData: new { MustChangePassword = dto.MustChangePassword }
             ));
 
-            return MapToResponseDto(subUser);
+            return MapToResponseDto(domainSubUser);
         }
 
         public async Task<IEnumerable<VenueSubUserResponseDto>> GetSubUsersAsync(Guid venueId)
@@ -405,9 +419,7 @@ namespace E7GEZLY_API.Services.VenueManagement
             }
 
             // Update session activity
-            session.LastActivityAt = DateTime.UtcNow;
-            session.RefreshToken = GenerateRefreshToken(); // Generate new refresh token
-            session.RefreshTokenExpiry = DateTime.UtcNow.AddDays(30);
+            session.UpdateRefreshToken(GenerateRefreshToken(), DateTime.UtcNow.AddDays(30));
 
             await _context.SaveChangesAsync();
         }
@@ -454,8 +466,7 @@ namespace E7GEZLY_API.Services.VenueManagement
                     // Deactivate all sessions in database (this should always work)
                     foreach (var session in activeSessions)
                     {
-                        session.IsActive = false;
-                        session.UpdatedAt = DateTime.UtcNow;
+                        session.Deactivate();
                     }
 
                     await _context.SaveChangesAsync();

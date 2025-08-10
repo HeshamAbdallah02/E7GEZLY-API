@@ -1,4 +1,5 @@
 ﻿// Controllers/Auth/PasswordResetController.cs
+using E7GEZLY_API.Attributes;
 using E7GEZLY_API.Data;
 using E7GEZLY_API.DTOs.Auth;
 using E7GEZLY_API.Models;
@@ -7,6 +8,8 @@ using E7GEZLY_API.Services.Location;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using DtoUserType = E7GEZLY_API.DTOs.Auth.UserType;
+using ModelUserType = E7GEZLY_API.Models.UserType;
 
 namespace E7GEZLY_API.Controllers.Auth
 {
@@ -29,6 +32,7 @@ namespace E7GEZLY_API.Controllers.Auth
         }
 
         [HttpPost("forgot")]
+        [RateLimit(3, 3600, "Password reset request rate limit exceeded. You can only request password reset 3 times per hour.")]
         public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordDto dto)
         {
             try
@@ -77,8 +81,8 @@ namespace E7GEZLY_API.Controllers.Auth
                 // Verify user type matches
                 bool isValidUserType = dto.UserType switch
                 {
-                    UserType.Customer => user.VenueId == null,
-                    UserType.Venue => user.VenueId != null,
+                    DtoUserType.Customer => user.VenueId == null,
+                    DtoUserType.Venue => user.VenueId != null,
                     _ => false
                 };
 
@@ -215,6 +219,7 @@ namespace E7GEZLY_API.Controllers.Auth
         }
 
         [HttpPost("reset")]
+        [RateLimit(5, 3600, "Password reset rate limit exceeded. You can only reset password 5 times per hour.")]
         public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordDto dto)
         {
             try

@@ -22,5 +22,10 @@ namespace E7GEZLY_API.Models
         public int DisplayOrder { get; set; } = 0;
 
         public bool IsPrimary { get; set; } = false;
+        
+        // Handler compatibility properties
+        public bool IsActive { get; set; } = true;
+        public string ImageType { get; set; } = "Image";
+        public bool IsMainImage => IsPrimary;
     }
 }

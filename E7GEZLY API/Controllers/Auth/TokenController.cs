@@ -1,63 +1,73 @@
-﻿// Controllers/Auth/TokenController.cs
-using E7GEZLY_API.Data;
+// Controllers/Auth/TokenController.cs
+using E7GEZLY_API.Application.Features.Authentication.Commands.RefreshToken;
 using E7GEZLY_API.DTOs.Auth;
+using E7GEZLY_API.DTOs.Common;
 using E7GEZLY_API.Extensions;
-using E7GEZLY_API.Models;
-using E7GEZLY_API.Services.Auth;
-using E7GEZLY_API.Services.Location;
-using Microsoft.AspNetCore.Identity;
+using MediatR;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 
 namespace E7GEZLY_API.Controllers.Auth
 {
+    /// <summary>
+    /// Token Controller using Clean Architecture with CQRS/MediatR pattern
+    /// Handles token management operations through Application layer
+    /// </summary>
     [ApiController]
     [Route("api/auth")]
-    public class TokenController : BaseAuthController
+    public class TokenController : ControllerBase
     {
-        public TokenController(
-            UserManager<ApplicationUser> userManager,
-            SignInManager<ApplicationUser> signInManager,
-            ITokenService tokenService,
-            IVerificationService verificationService,
-            ILocationService locationService,
-            IGeocodingService geocodingService,
-            AppDbContext context,
-            ILogger<TokenController> logger,
-            IWebHostEnvironment environment)
-            : base(userManager, signInManager, tokenService, verificationService, locationService, geocodingService, context, logger, environment)
+        private readonly IMediator _mediator;
+        private readonly ILogger<TokenController> _logger;
+
+        public TokenController(IMediator mediator, ILogger<TokenController> logger)
         {
+            _mediator = mediator;
+            _logger = logger;
         }
 
+        /// <summary>
+        /// Refresh authentication token
+        /// </summary>
         [HttpPost("token/refresh")]
-        public async Task<IActionResult> RefreshToken(RefreshTokenDto dto)
+        public async Task<ActionResult<ApiResponse<AuthResponseDto>>> RefreshToken([FromBody] RefreshTokenDto request)
         {
             try
             {
                 var ipAddress = HttpContext.GetClientIpAddress();
-                var tokens = await _tokenService.RefreshTokensAsync(dto.RefreshToken, ipAddress);
+                var userAgent = Request.Headers["User-Agent"].ToString();
 
-                if (tokens == null)
+                var command = new RefreshTokenCommand
                 {
-                    return Unauthorized(new { message = "Invalid or expired refresh token" });
+                    RefreshToken = request.RefreshToken,
+                    IpAddress = ipAddress,
+                    UserAgent = userAgent
+                };
+
+                var result = await _mediator.Send(command);
+
+                if (result.IsSuccess)
+                {
+                    _logger.LogInformation("Token refreshed successfully");
+                    return Ok(ApiResponse<AuthResponseDto>.CreateSuccess(result.Data!));
                 }
 
-                _logger.LogInformation($"Token refreshed successfully");
-                return Ok(tokens);
+                return BadRequest(ApiResponse<AuthResponseDto>.CreateError(result.ErrorMessage!));
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error during token refresh");
-                return StatusCode(500, new { message = "An error occurred during token refresh" });
+                return StatusCode(500, ApiResponse<AuthResponseDto>.CreateError("An error occurred during token refresh"));
             }
         }
 
-        // Keep the old endpoint for backward compatibility but mark it as obsolete
+        /// <summary>
+        /// Refresh authentication token (Legacy endpoint for backward compatibility)
+        /// </summary>
         [HttpPost("refresh")]
         [Obsolete("Use /api/auth/token/refresh instead")]
-        public async Task<IActionResult> RefreshTokenLegacy(RefreshTokenDto dto)
+        public async Task<ActionResult<ApiResponse<AuthResponseDto>>> RefreshTokenLegacy([FromBody] RefreshTokenDto request)
         {
-            return await RefreshToken(dto);
+            return await RefreshToken(request);
         }
     }
 }

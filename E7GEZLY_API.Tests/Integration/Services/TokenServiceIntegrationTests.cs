@@ -8,6 +8,7 @@ using E7GEZLY_API.Services.Auth;
 using E7GEZLY_API.Models;
 using E7GEZLY_API.Data;
 using E7GEZLY_API.Tests.Categories;
+using E7GEZLY_API.Domain.Enums;
 using System;
 using System.Threading.Tasks;
 using System.Collections.Generic;

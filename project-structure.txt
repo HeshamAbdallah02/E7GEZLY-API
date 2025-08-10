@@ -1,10 +1,164 @@
-E7GEZLY API/
+﻿E7GEZLY API/
+├── .claude
+│   ├── agents
+│   │   ├── e7gezly-architect.md
+│   │   ├── e7gezly-auth-specialist.md
+│   │   ├── e7gezly-courts-specialist.md
+│   │   └── e7gezly-subuser-specialist.md
+│   └── settings.local.json
 ├── .github
 │   └── workflows
 ├── E7GEZLY API
+│   ├── Application
+│   │   ├── Common
+│   │   │   ├── Behaviors
+│   │   │   │   ├── LoggingBehavior.cs
+│   │   │   │   ├── PerformanceBehavior.cs
+│   │   │   │   └── ValidationBehavior.cs
+│   │   │   ├── Interfaces
+│   │   │   │   ├── IApplicationDbContext.cs
+│   │   │   │   ├── ICurrentUserService.cs
+│   │   │   │   ├── IDateTimeService.cs
+│   │   │   │   └── IUnitOfWork.cs
+│   │   │   ├── Mappings
+│   │   │   │   └── MappingProfile.cs
+│   │   │   ├── Models
+│   │   │   │   └── ApplicationResult.cs
+│   │   │   └── Services
+│   │   │       ├── CurrentUserService.cs
+│   │   │       └── DateTimeService.cs
+│   │   ├── Features
+│   │   │   ├── Authentication
+│   │   │   │   ├── Commands
+│   │   │   │   │   ├── CreateFirstAdmin
+│   │   │   │   │   │   ├── CreateFirstAdminCommand.cs
+│   │   │   │   │   │   └── CreateFirstAdminHandler.cs
+│   │   │   │   │   ├── Login
+│   │   │   │   │   │   ├── VenueLoginCommand.cs
+│   │   │   │   │   │   ├── VenueLoginHandler.cs
+│   │   │   │   │   │   └── VenueLoginValidator.cs
+│   │   │   │   │   ├── RefreshToken
+│   │   │   │   │   │   ├── RefreshTokenCommand.cs
+│   │   │   │   │   │   ├── RefreshTokenHandler.cs
+│   │   │   │   │   │   └── RefreshTokenValidator.cs
+│   │   │   │   │   ├── Register
+│   │   │   │   │   │   ├── RegisterVenueCommand.cs
+│   │   │   │   │   │   ├── RegisterVenueHandler.cs
+│   │   │   │   │   │   └── RegisterVenueValidator.cs
+│   │   │   │   │   ├── ResetPassword
+│   │   │   │   │   │   ├── ConfirmPasswordResetCommand.cs
+│   │   │   │   │   │   ├── ConfirmPasswordResetHandler.cs
+│   │   │   │   │   │   ├── ConfirmPasswordResetValidator.cs
+│   │   │   │   │   │   ├── RequestPasswordResetCommand.cs
+│   │   │   │   │   │   ├── RequestPasswordResetHandler.cs
+│   │   │   │   │   │   └── RequestPasswordResetValidator.cs
+│   │   │   │   │   └── VerifyEmail
+│   │   │   │   │       ├── VerifyEmailCommand.cs
+│   │   │   │   │       ├── VerifyEmailHandler.cs
+│   │   │   │   │       └── VerifyEmailValidator.cs
+│   │   │   │   └── Queries
+│   │   │   │       ├── GetUserProfile
+│   │   │   │       │   ├── GetUserProfileHandler.cs
+│   │   │   │       │   ├── GetUserProfileQuery.cs
+│   │   │   │       │   └── GetUserProfileValidator.cs
+│   │   │   │       └── ValidateToken
+│   │   │   │           ├── ValidateTokenHandler.cs
+│   │   │   │           ├── ValidateTokenQuery.cs
+│   │   │   │           └── ValidateTokenValidator.cs
+│   │   │   ├── Location
+│   │   │   │   ├── Commands
+│   │   │   │   │   ├── GeocodeCoordinates
+│   │   │   │   │   │   ├── GeocodeCoordinatesCommand.cs
+│   │   │   │   │   │   └── GeocodeCoordinatesHandler.cs
+│   │   │   │   │   └── ValidateAddress
+│   │   │   │   │       ├── ValidateAddressCommand.cs
+│   │   │   │   │       └── ValidateAddressHandler.cs
+│   │   │   │   └── Queries
+│   │   │   │       ├── GetDistrictFromCoordinates
+│   │   │   │       │   ├── GetDistrictFromCoordinatesHandler.cs
+│   │   │   │       │   └── GetDistrictFromCoordinatesQuery.cs
+│   │   │   │       ├── GetDistricts
+│   │   │   │       │   ├── GetDistrictsHandler.cs
+│   │   │   │       │   └── GetDistrictsQuery.cs
+│   │   │   │       └── GetGovernorates
+│   │   │   │           ├── GetGovernoratesHandler.cs
+│   │   │   │           └── GetGovernoratesQuery.cs
+│   │   │   ├── SubUsers
+│   │   │   │   ├── Commands
+│   │   │   │   │   ├── ChangeSubUserPassword
+│   │   │   │   │   │   ├── ChangeSubUserPasswordCommand.cs
+│   │   │   │   │   │   └── ChangeSubUserPasswordHandler.cs
+│   │   │   │   │   ├── CreateSubUser
+│   │   │   │   │   │   ├── CreateSubUserCommand.cs
+│   │   │   │   │   │   ├── CreateSubUserHandler.cs
+│   │   │   │   │   │   └── CreateSubUserValidator.cs
+│   │   │   │   │   ├── DeleteSubUser
+│   │   │   │   │   │   ├── DeleteSubUserCommand.cs
+│   │   │   │   │   │   ├── DeleteSubUserHandler.cs
+│   │   │   │   │   │   └── DeleteSubUserValidator.cs
+│   │   │   │   │   ├── LoginSubUser
+│   │   │   │   │   │   ├── LoginSubUserCommand.cs
+│   │   │   │   │   │   ├── LoginSubUserHandler.cs
+│   │   │   │   │   │   └── LoginSubUserValidator.cs
+│   │   │   │   │   ├── LogoutSubUser
+│   │   │   │   │   │   ├── LogoutSubUserCommand.cs
+│   │   │   │   │   │   └── LogoutSubUserHandler.cs
+│   │   │   │   │   ├── ResetSubUserPassword
+│   │   │   │   │   │   ├── ResetSubUserPasswordCommand.cs
+│   │   │   │   │   │   └── ResetSubUserPasswordHandler.cs
+│   │   │   │   │   └── UpdateSubUser
+│   │   │   │   │       ├── UpdateSubUserCommand.cs
+│   │   │   │   │       ├── UpdateSubUserHandler.cs
+│   │   │   │   │       └── UpdateSubUserValidator.cs
+│   │   │   │   └── Queries
+│   │   │   │       ├── GetAuditLogs
+│   │   │   │       │   ├── GetAuditLogsHandler.cs
+│   │   │   │       │   └── GetAuditLogsQuery.cs
+│   │   │   │       ├── GetSubUser
+│   │   │   │       │   ├── GetSubUserHandler.cs
+│   │   │   │       │   ├── GetSubUserQuery.cs
+│   │   │   │       │   └── GetSubUserValidator.cs
+│   │   │   │       └── GetSubUsers
+│   │   │   │           ├── GetSubUsersHandler.cs
+│   │   │   │           ├── GetSubUsersQuery.cs
+│   │   │   │           └── GetSubUsersValidator.cs
+│   │   │   ├── Testing
+│   │   │   │   └── Queries
+│   │   │   │       ├── GetAnonymousTest
+│   │   │   │       │   ├── GetAnonymousTestHandler.cs
+│   │   │   │       │   └── GetAnonymousTestQuery.cs
+│   │   │   │       └── TestGeocoding
+│   │   │   │           ├── TestGeocodingHandler.cs
+│   │   │   │           └── TestGeocodingQuery.cs
+│   │   │   └── VenueProfile
+│   │   │       ├── Commands
+│   │   │       │   ├── CompleteCourtProfile
+│   │   │       │   │   ├── CompleteCourtProfileCommand.cs
+│   │   │       │   │   ├── CompleteCourtProfileHandler.cs
+│   │   │       │   │   └── CompleteCourtProfileValidator.cs
+│   │   │       │   ├── CompletePlayStationProfile
+│   │   │       │   │   ├── CompletePlayStationProfileCommand.cs
+│   │   │       │   │   ├── CompletePlayStationProfileHandler.cs
+│   │   │       │   │   └── CompletePlayStationProfileValidator.cs
+│   │   │       │   └── CompleteProfile
+│   │   │       │       ├── CompleteVenueProfileCommand.cs
+│   │   │       │       ├── CompleteVenueProfileHandler.cs
+│   │   │       │       └── CompleteVenueProfileValidator.cs
+│   │   │       └── Queries
+│   │   │           ├── GetVenueProfile
+│   │   │           │   ├── GetVenueProfileHandler.cs
+│   │   │           │   ├── GetVenueProfileQuery.cs
+│   │   │           │   └── GetVenueProfileValidator.cs
+│   │   │           └── IsProfileComplete
+│   │   │               ├── IsProfileCompleteHandler.cs
+│   │   │               ├── IsProfileCompleteQuery.cs
+│   │   │               └── IsProfileCompleteValidator.cs
+│   │   └── DependencyInjection.cs
 │   ├── Attributes
 │   │   ├── RateLimitAttribute.cs
-│   │   └── RequireCompleteProfileAttribute.cs
+│   │   ├── RequireCompleteProfileAttribute.cs
+│   │   ├── RequireVenueGatewayAttribute.cs
+│   │   └── RequireVenuePermissionAttribute.cs
 │   ├── Configuration
 │   │   ├── CacheConfiguration.cs
 │   │   └── RateLimitConfiguration.cs
@@ -20,7 +174,8 @@ E7GEZLY API/
 │   │   │   └── VerificationController.cs
 │   │   ├── VenueManagement
 │   │   │   ├── VenueBookingController.cs
-│   │   │   └── VenueProfileController.cs
+│   │   │   ├── VenueProfileController.cs
+│   │   │   └── VenueSubUserController.cs
 │   │   ├── LocationController.cs
 │   │   └── TestController.cs
 │   ├── Converters
@@ -29,6 +184,48 @@ E7GEZLY API/
 │   │   ├── AppDbContext.cs
 │   │   ├── DbInitializer.cs
 │   │   └── LocationSeeder.cs
+│   ├── Domain
+│   │   ├── Common
+│   │   │   ├── AggregateRoot.cs
+│   │   │   ├── BaseEntity.cs
+│   │   │   ├── DomainException.cs
+│   │   │   ├── IDomainEvent.cs
+│   │   │   └── ValueObject.cs
+│   │   ├── Entities
+│   │   │   ├── CustomerProfile.cs
+│   │   │   ├── LocationEntities.cs
+│   │   │   ├── Reservation.cs
+│   │   │   ├── User.cs
+│   │   │   ├── Venue.cs
+│   │   │   ├── VenueAuditLog.cs
+│   │   │   ├── VenueDetails.cs
+│   │   │   └── VenueSubUser.cs
+│   │   ├── Enums
+│   │   │   └── VenueEnums.cs
+│   │   ├── Events
+│   │   │   ├── UserEvents.cs
+│   │   │   └── VenueEvents.cs
+│   │   ├── Repositories
+│   │   │   ├── ICustomerProfileRepository.cs
+│   │   │   ├── ILocationRepository.cs
+│   │   │   ├── IUserRepository.cs
+│   │   │   └── IVenueRepository.cs
+│   │   ├── Services
+│   │   │   ├── CachedVenueAuthorizationService.cs
+│   │   │   ├── IPasswordVerificationService.cs
+│   │   │   ├── IUserVerificationService.cs
+│   │   │   ├── IVenueAuthorizationService.cs
+│   │   │   ├── IVenueProfileCompletionService.cs
+│   │   │   ├── PasswordVerificationService.cs
+│   │   │   ├── UserVerificationService.cs
+│   │   │   ├── VenueAuthorizationService.cs
+│   │   │   └── VenueProfileCompletionService.cs
+│   │   ├── ValueObjects
+│   │   │   ├── Address.cs
+│   │   │   ├── Coordinates.cs
+│   │   │   ├── PersonName.cs
+│   │   │   └── VenueName.cs
+│   │   └── README-Domain-Layer.md
 │   ├── DTOs
 │   │   ├── Auth
 │   │   │   ├── AccountManagementDtos.cs
@@ -42,7 +239,8 @@ E7GEZLY API/
 │   │   │   ├── SocialAuthDtos.cs
 │   │   │   └── VerificationDtos.cs
 │   │   ├── Common
-│   │   │   └── ApiResponseDtos.cs
+│   │   │   ├── ApiResponseDtos.cs
+│   │   │   └── PagedResponse.cs
 │   │   ├── Customer
 │   │   │   └── CustomerProfileDtos.cs
 │   │   ├── Location
@@ -51,13 +249,17 @@ E7GEZLY API/
 │   │   ├── User
 │   │   │   └── UserDtos.cs
 │   │   └── Venue
+│   │       ├── VenueAuditLogDtos.cs
 │   │       ├── VenueProfileCompletionDtos.cs
-│   │       └── VenueProfileDtos.cs
+│   │       ├── VenueProfileDtos.cs
+│   │       └── VenueSubUserDtos.cs
 │   ├── Exceptions
-│   │   └── GeocodingException.cs
+│   │   ├── GeocodingException.cs
+│   │   └── NotFoundException.cs
 │   ├── Extensions
 │   │   ├── AuthenticationExtensions.cs
 │   │   ├── CacheExtensions.cs
+│   │   ├── ClaimsPrincipalExtensions.cs
 │   │   ├── CorsExtensions.cs
 │   │   ├── HealthChecksExtensions.cs
 │   │   ├── HttpContextExtensions.cs
@@ -70,9 +272,35 @@ E7GEZLY API/
 │   ├── HealthChecks
 │   │   ├── NominatimHealthCheck.cs
 │   │   └── RedisHealthCheck.cs
+│   ├── Infrastructure
+│   │   ├── Mappings
+│   │   │   └── DomainToModelMappingProfile.cs.backup
+│   │   ├── Persistence
+│   │   │   ├── Configurations
+│   │   │   │   ├── CustomerProfileConfiguration.cs
+│   │   │   │   ├── ExternalLoginConfiguration.cs
+│   │   │   │   ├── ReservationConfiguration.cs
+│   │   │   │   ├── UserConfiguration.cs
+│   │   │   │   ├── UserSessionConfiguration.cs
+│   │   │   │   ├── VenueAuditLogConfiguration.cs
+│   │   │   │   ├── VenueConfiguration.cs
+│   │   │   │   ├── VenueImageConfiguration.cs
+│   │   │   │   ├── VenuePlayStationDetailsConfiguration.cs
+│   │   │   │   ├── VenuePricingConfiguration.cs
+│   │   │   │   ├── VenueSubUserConfiguration.cs
+│   │   │   │   ├── VenueSubUserSessionConfiguration.cs
+│   │   │   │   └── VenueWorkingHoursConfiguration.cs
+│   │   │   └── UnitOfWork.cs
+│   │   ├── Repositories
+│   │   │   ├── CustomerProfileRepository.cs
+│   │   │   ├── LocationRepository.cs
+│   │   │   ├── UserRepository.cs
+│   │   │   └── VenueRepository.cs
+│   │   └── DependencyInjection.cs
 │   ├── Middleware
 │   │   ├── CustomRateLimitMiddleware.cs
 │   │   ├── GlobalExceptionMiddleware.cs
+│   │   ├── TokenBlacklistMiddleware.cs
 │   │   └── UserRateLimitMiddleware.cs
 │   ├── Migrations
 │   │   ├── 20250722134948_InitialCreate.cs
@@ -87,6 +315,12 @@ E7GEZLY API/
 │   │   ├── 20250726133303_AddExternalLoginsTable.Designer.cs
 │   │   ├── 20250728210408_AddVenueProfileCompletionEntities.cs
 │   │   ├── 20250728210408_AddVenueProfileCompletionEntities.Designer.cs
+│   │   ├── 20250731152119_AddVenueSubUserSystem.cs
+│   │   ├── 20250731152119_AddVenueSubUserSystem.Designer.cs
+│   │   ├── 20250731204241_AddVenueSubUserSessions.cs
+│   │   ├── 20250731204241_AddVenueSubUserSessions.Designer.cs
+│   │   ├── 20250801152532_AddAccessTokenJtiToVenueSubUserSession.cs
+│   │   ├── 20250801152532_AddAccessTokenJtiToVenueSubUserSession.Designer.cs
 │   │   └── AppDbContextModelSnapshot.cs
 │   ├── Models
 │   │   ├── ApplicationUser.cs
@@ -97,20 +331,27 @@ E7GEZLY API/
 │   │   ├── Reservation.cs
 │   │   ├── UserSession.cs
 │   │   ├── Venue.cs
+│   │   ├── VenueAuditLog.cs
 │   │   ├── VenueImage.cs
 │   │   ├── VenuePlayStationDetails.cs
 │   │   ├── VenuePricing.cs
+│   │   ├── VenueSubUser.cs
+│   │   ├── VenueSubUserSession.cs
 │   │   └── VenueWorkingHours.cs
 │   ├── Properties
 │   │   └── launchSettings.json
 │   ├── Services
 │   │   ├── Auth
+│   │   │   ├── CachedAuthenticationService.cs
+│   │   │   ├── ICachedAuthenticationService.cs
 │   │   │   ├── IProfileService.cs
 │   │   │   ├── ISocialAuthService.cs
+│   │   │   ├── ITokenBlacklistService.cs
 │   │   │   ├── ITokenService.cs
 │   │   │   ├── IVerificationService.cs
 │   │   │   ├── ProfileService.cs
 │   │   │   ├── SocialAuthService.cs
+│   │   │   ├── TokenBlacklistService.cs
 │   │   │   ├── TokenService.cs
 │   │   │   └── VerificationService.cs
 │   │   ├── BackgroundServices
@@ -118,6 +359,7 @@ E7GEZLY API/
 │   │   ├── Cache
 │   │   │   ├── DistributedRateLimitCounterStore.cs
 │   │   │   ├── ICacheService.cs
+│   │   │   ├── InMemoryCacheService.cs
 │   │   │   └── RedisCacheService.cs
 │   │   ├── Communication
 │   │   │   ├── IEmailService.cs
@@ -133,8 +375,10 @@ E7GEZLY API/
 │   │   │   ├── LocationService.cs
 │   │   │   └── NominatimGeocodingService.cs
 │   │   └── VenueManagement
-│   │       ├── IVenueProfileService.cs
-│   │       └── VenueProfileService.cs
+│   │       ├── IVenueAuditService.cs
+│   │       ├── IVenueSubUserService.cs
+│   │       ├── VenueAuditService.cs
+│   │       └── VenueSubUserService.cs
 │   ├── Tests
 │   │   ├── Integration
 │   │   │   └── GeocodingServiceTests.cs
@@ -143,12 +387,16 @@ E7GEZLY API/
 │   ├── appsettings.Development.json
 │   ├── appsettings.json
 │   ├── appsettings.Production.json
+│   ├── CLEAN_ARCHITECTURE_DEVELOPER_GUIDELINES.md
+│   ├── CLEAN_ARCHITECTURE_TRANSFORMATION_SUMMARY.md
 │   ├── E7GEZLY API.csproj
 │   ├── E7GEZLY API.csproj.Backup.tmp
 │   ├── E7GEZLY API.csproj.user
 │   ├── E7GEZLY API.http
+│   ├── E7GEZLY-API-TESTING.http
 │   ├── Program.cs
-│   └── testsettings.json
+│   ├── testsettings.json
+│   └── VALIDATION_CHECKLIST.md
 ├── E7GEZLY_API.Tests
 │   ├── Categories
 │   │   └── TestCategories.cs
@@ -159,14 +407,19 @@ E7GEZLY API/
 │   │       └── TokenServiceIntegrationTests.cs
 │   ├── Mocks
 │   │   └── MockCacheService.cs
+│   ├── Performance
+│   │   └── CleanArchitecturePerformanceTests.cs
 │   ├── TestHelpers
 │   │   └── TestDataFactory.cs
 │   ├── Unit
+│   │   ├── Application
+│   │   │   └── GetGovernoratesHandlerTests.cs
+│   │   ├── Domain
+│   │   │   └── VenueTests.cs
 │   │   └── Services
 │   │       ├── GeocodingServiceTests.cs
 │   │       ├── LocationServiceTests.cs
 │   │       ├── TokenServiceTests.cs
-│   │       ├── VenueProfileServiceTests.cs
 │   │       └── VerificationServiceTests.cs
 │   ├── E7GEZLY_API.Tests.csproj
 │   └── testsettings.json
@@ -178,6 +431,7 @@ E7GEZLY API/
 ├── E7GEZLY API.sln
 ├── Flutter-Integration-Guide.md
 ├── Multi-Device-Session-Handling-Guide.md
+├── nul
 ├── project-structure.txt
 ├── README.md
 ├── run-coverage.ps1

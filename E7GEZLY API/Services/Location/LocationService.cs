@@ -41,7 +41,14 @@ namespace E7GEZLY_API.Services.Location
 
             return await query
                 .OrderBy(d => d.NameEn)
-                .Select(d => new DistrictDto(d.Id, d.NameEn, d.NameAr, d.GovernorateId))
+                .Select(d => new DistrictDto
+                {
+                    Id = d.Id,
+                    NameEn = d.NameEn,
+                    NameAr = d.NameAr,
+                    GovernorateId = d.GovernorateId,
+                    GovernorateName = d.Governorate.NameEn
+                })
                 .ToListAsync();
         }
 

@@ -1,0 +1,30 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mkdir:*)",
+      "Bash(dotnet build:*)",
+      "Bash(dotnet restore:*)",
+      "Bash(find:*)",
+      "Bash(pushd:*)",
+      "Bash(popd:*)",
+      "Bash(\"C:\\Program Files\\dotnet\\dotnet.exe\" build \"D:\\E7GEZLY\\E7GEZLY API\\E7GEZLY API\\E7GEZLY API.csproj\" --no-restore)",
+      "Bash(\"C:\\Program Files\\dotnet\\dotnet.exe\" build \"D:\\E7GEZLY\\E7GEZLY API\\E7GEZLY API\\E7GEZLY API.csproj\" --no-restore --verbosity minimal)",
+      "Bash(rm:*)",
+      "Bash(sed:*)",
+      "Bash(dotnet clean:*)",
+      "Bash(grep:*)",
+      "Bash(dotnet run:*)",
+      "Bash(curl:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(dotnet test:*)",
+      "Bash(mv:*)",
+      "Bash(del LocationController.cs)",
+      "Bash(timeout:*)",
+      "Bash(csc:*)",
+      "Bash(del \"Models\\VenueEnums.cs\")",
+      "Bash(dir:*)"
+    ],
+    "deny": []
+  }
+}

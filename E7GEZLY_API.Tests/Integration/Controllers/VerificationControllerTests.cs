@@ -1,7 +1,7 @@
 ﻿using E7GEZLY_API.Data;
 using E7GEZLY_API.DTOs.Auth;
 using E7GEZLY_API.Models;
-using E7GEZLY_API.Services.Caching;
+using E7GEZLY_API.Services.Cache;
 using E7GEZLY_API.Services.Communication;
 using E7GEZLY_API.Tests.Categories;
 using E7GEZLY_API.Tests.Mocks;

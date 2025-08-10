@@ -22,4 +22,16 @@
         IEnumerable<string> Providers,
         bool IsAppleDevice
     );
+
+    public record LinkedAccountDto(
+        string Provider,
+        string? Email,
+        string? DisplayName,
+        DateTime LinkedAt,
+        DateTime? LastLoginAt
+    );
+
+    public record LinkedAccountsResponseDto(
+        IEnumerable<LinkedAccountDto> LinkedAccounts
+    );
 }

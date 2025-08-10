@@ -4,6 +4,7 @@ using E7GEZLY_API.Data;
 using E7GEZLY_API.DTOs.Auth;
 using E7GEZLY_API.Extensions;
 using E7GEZLY_API.Models;
+using E7GEZLY_API.Domain.Entities;
 using E7GEZLY_API.Services.Auth;
 using E7GEZLY_API.Services.Location;
 using Microsoft.AspNetCore.Authorization;
@@ -69,10 +70,10 @@ namespace E7GEZLY_API.Controllers.Auth
                     profile = new
                     {
                         id = profile!.Id,
-                        firstName = profile.FirstName,
-                        lastName = profile.LastName,
+                        firstName = profile.Name.FirstName,
+                        lastName = profile.Name.LastName,
                         dateOfBirth = profile.DateOfBirth,
-                        address = profile.FullAddress,
+                        address = profile.Address.FullAddress,
                         district = profile.District?.NameEn,
                         governorate = profile.District?.Governorate?.NameEn
                     }
@@ -101,14 +102,14 @@ namespace E7GEZLY_API.Controllers.Auth
                     venue = new
                     {
                         id = venue!.Id,
-                        name = venue.Name,
+                        name = venue.Name.Name,
                         type = venue.VenueType.ToString(),
                         isProfileComplete = venue.IsProfileComplete,
                         location = venue.IsProfileComplete ? new
                         {
-                            latitude = venue.Latitude,
-                            longitude = venue.Longitude,
-                            address = venue.FullAddress,
+                            latitude = venue.Address.Coordinates?.Latitude,
+                            longitude = venue.Address.Coordinates?.Longitude,
+                            address = venue.Address.FullAddress,
                             district = venue.District?.NameEn,
                             governorate = venue.District?.Governorate?.NameEn
                         } : null

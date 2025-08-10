@@ -34,6 +34,11 @@ namespace E7GEZLY_API.Models
 
         public DateTime LastActivityAt { get; set; } = DateTime.UtcNow;
 
+        // Logout tracking
+        public DateTime? LogoutAt { get; set; }
+        [StringLength(200)]
+        public string? LogoutReason { get; set; }
+
         /// <summary>
         /// JWT ID (jti claim) for token blacklisting when user logs out
         /// This allows us to invalidate specific access tokens immediately

@@ -46,25 +46,26 @@ namespace E7GEZLY_API.Extensions
 
         private static void DecorateServicesWithCaching(IServiceCollection services)
         {
-/*            // Decorate LocationService with caching
-            services.Decorate<ILocationService>((inner, provider) =>
-            {
-                var cache = provider.GetRequiredService<ICacheService>();
-                var config = provider.GetRequiredService<IOptions<CacheConfiguration>>();
-                var logger = provider.GetRequiredService<ILogger<CachedLocationService>>();
+            // temporarily commented out caching decorators for services
+            /*            // Decorate LocationService with caching
+                        services.Decorate<ILocationService>((inner, provider) =>
+                        {
+                            var cache = provider.GetRequiredService<ICacheService>();
+                            var config = provider.GetRequiredService<IOptions<CacheConfiguration>>();
+                            var logger = provider.GetRequiredService<ILogger<CachedLocationService>>();
 
-                return new CachedLocationService(inner, cache, config, logger);
-            });
+                            return new CachedLocationService(inner, cache, config, logger);
+                        });
 
-            // Decorate GeocodingService with distributed caching
-            services.Decorate<IGeocodingService>((inner, provider) =>
-            {
-                var cache = provider.GetRequiredService<ICacheService>();
-                var config = provider.GetRequiredService<IOptions<CacheConfiguration>>();
-                var logger = provider.GetRequiredService<ILogger<CachedGeocodingService>>();
+                        // Decorate GeocodingService with distributed caching
+                        services.Decorate<IGeocodingService>((inner, provider) =>
+                        {
+                            var cache = provider.GetRequiredService<ICacheService>();
+                            var config = provider.GetRequiredService<IOptions<CacheConfiguration>>();
+                            var logger = provider.GetRequiredService<ILogger<CachedGeocodingService>>();
 
-                return new CachedGeocodingService(inner, cache, config, logger);
-            });*/
+                            return new CachedGeocodingService(inner, cache, config, logger);
+                        });*/
         }
 
         public static IApplicationBuilder UseDistributedCaching(this IApplicationBuilder app)

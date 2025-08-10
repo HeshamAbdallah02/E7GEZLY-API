@@ -1,0 +1,43 @@
+### Social Auth API Tests for MediatR Conversion
+
+### Get Available Social Providers
+GET {{baseUrl}}/api/auth/social/providers
+User-Agent: Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X) AppleWebKit/605.1.15
+Content-Type: application/json
+
+###
+
+### Test Google Social Login (Mock Request)
+POST {{baseUrl}}/api/auth/social/login
+Content-Type: application/json
+
+{
+  "provider": "google",
+  "accessToken": "mock_google_token_for_testing",
+  "deviceName": "iPhone 13",
+  "deviceType": "mobile",
+  "userAgent": "E7GEZLY iOS App",
+  "ipAddress": "192.168.1.1"
+}
+
+###
+
+### Test with Android User Agent
+GET {{baseUrl}}/api/auth/social/providers
+User-Agent: Mozilla/5.0 (Linux; Android 10; SM-G975F) AppleWebKit/537.36
+Content-Type: application/json
+
+###
+
+# Note: Additional endpoint tests require authentication
+# Link Social Account (requires auth token)
+# POST {{baseUrl}}/api/auth/social/link
+# Authorization: Bearer {{authToken}}
+
+# Unlink Social Account (requires auth token)
+# DELETE {{baseUrl}}/api/auth/social/unlink/google
+# Authorization: Bearer {{authToken}}
+
+# Get Linked Accounts (requires auth token)
+# GET {{baseUrl}}/api/auth/social/linked-accounts
+# Authorization: Bearer {{authToken}}

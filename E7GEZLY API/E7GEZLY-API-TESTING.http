@@ -1,0 +1,723 @@
+# E7GEZLY Venue Booking API - Comprehensive Testing Guide
+# Egyptian Market Venue Booking Platform
+# API Version: 1.0
+# Base URL: https://localhost:7001 (Development)
+
+### Variables
+@baseUrl = https://localhost:7001
+@venueToken = {{venueLoginResponse.response.body.accessToken}}
+@customerToken = {{customerLoginResponse.response.body.accessToken}}
+
+### ============================================================================
+### 1. HEALTH CHECKS & SYSTEM STATUS
+### ============================================================================
+
+### Health Check
+GET {{baseUrl}}/health
+Accept: application/json
+
+### Test Controller - Basic connectivity
+GET {{baseUrl}}/api/test
+Accept: application/json
+
+### ============================================================================
+### 2. AUTHENTICATION ENDPOINTS
+### ============================================================================
+
+### Register New Venue - Football Court
+# @name venueRegister
+POST {{baseUrl}}/api/auth/venue/register
+Content-Type: application/json
+
+{
+  "venueName": "Cairo United Football Club",
+  "email": "owner@cairounited.eg",
+  "phoneNumber": "+201234567890",
+  "password": "SecurePass123!",
+  "confirmPassword": "SecurePass123!",
+  "venueType": 1,
+  "features": 0
+}
+
+### Register New Venue - PlayStation Venue
+POST {{baseUrl}}/api/auth/venue/register
+Content-Type: application/json
+
+{
+  "venueName": "GameZone PlayStation Café",
+  "email": "owner@gamezone.eg",
+  "phoneNumber": "+201234567891",
+  "password": "SecurePass123!",
+  "confirmPassword": "SecurePass123!",
+  "venueType": 0,
+  "features": 0
+}
+
+### Register New Customer
+# @name customerRegister
+POST {{baseUrl}}/api/auth/customer/register
+Content-Type: application/json
+
+{
+  "firstName": "Ahmed",
+  "lastName": "Mohamed",
+  "email": "ahmed.mohamed@example.eg",
+  "phoneNumber": "+201234567892",
+  "password": "SecurePass123!",
+  "confirmPassword": "SecurePass123!",
+  "dateOfBirth": "1995-05-15"
+}
+
+### Venue Login
+# @name venueLoginResponse
+POST {{baseUrl}}/api/auth/venue/login
+Content-Type: application/json
+
+{
+  "email": "owner@cairounited.eg",
+  "password": "SecurePass123!",
+  "deviceName": "Web Browser",
+  "deviceType": "Desktop"
+}
+
+### Customer Login
+# @name customerLoginResponse
+POST {{baseUrl}}/api/auth/customer/login
+Content-Type: application/json
+
+{
+  "email": "ahmed.mohamed@example.eg",
+  "password": "SecurePass123!",
+  "deviceName": "Mobile App",
+  "deviceType": "iOS"
+}
+
+### Refresh Token
+POST {{baseUrl}}/api/auth/token/refresh
+Content-Type: application/json
+Authorization: Bearer {{venueToken}}
+
+{
+  "refreshToken": "your-refresh-token-here"
+}
+
+### Logout
+POST {{baseUrl}}/api/auth/token/logout
+Authorization: Bearer {{venueToken}}
+
+### ============================================================================
+### 3. EMAIL & PHONE VERIFICATION
+### ============================================================================
+
+### Request Email Verification
+POST {{baseUrl}}/api/auth/verification/email/request
+Content-Type: application/json
+Authorization: Bearer {{venueToken}}
+
+### Verify Email with Code
+POST {{baseUrl}}/api/auth/verification/email/confirm
+Content-Type: application/json
+Authorization: Bearer {{venueToken}}
+
+{
+  "verificationCode": "123456"
+}
+
+### Request Phone Verification
+POST {{baseUrl}}/api/auth/verification/phone/request
+Content-Type: application/json
+Authorization: Bearer {{venueToken}}
+
+### Verify Phone with Code
+POST {{baseUrl}}/api/auth/verification/phone/confirm
+Content-Type: application/json
+Authorization: Bearer {{venueToken}}
+
+{
+  "verificationCode": "654321"
+}
+
+### ============================================================================
+### 4. PASSWORD RESET FLOW
+### ============================================================================
+
+### Request Password Reset via Email
+POST {{baseUrl}}/api/auth/password-reset/request
+Content-Type: application/json
+
+{
+  "email": "owner@cairounited.eg",
+  "resetMethod": "email"
+}
+
+### Request Password Reset via Phone
+POST {{baseUrl}}/api/auth/password-reset/request
+Content-Type: application/json
+
+{
+  "phoneNumber": "+201234567890",
+  "resetMethod": "phone"
+}
+
+### Confirm Password Reset
+POST {{baseUrl}}/api/auth/password-reset/confirm
+Content-Type: application/json
+
+{
+  "email": "owner@cairounited.eg",
+  "resetMethod": "email",
+  "resetCode": "123456",
+  "newPassword": "NewSecurePass123!",
+  "confirmPassword": "NewSecurePass123!"
+}
+
+### ============================================================================
+### 5. LOCATION SERVICES (Egyptian Geographic Data)
+### ============================================================================
+
+### Get All Governorates
+GET {{baseUrl}}/api/location/governorates
+Accept: application/json
+
+### Get Districts by Governorate (Cairo)
+GET {{baseUrl}}/api/location/governorates/1/districts
+Accept: application/json
+
+### Get Specific District Details
+GET {{baseUrl}}/api/location/districts/1
+Accept: application/json
+
+### Geocoding - Address to Coordinates
+GET {{baseUrl}}/api/location/geocoding/forward?address=New Cairo, Cairo, Egypt
+Accept: application/json
+
+### Reverse Geocoding - Coordinates to Address
+GET {{baseUrl}}/api/location/geocoding/reverse?latitude=30.0444&longitude=31.2357
+Accept: application/json
+
+### ============================================================================
+### 6. VENUE PROFILE MANAGEMENT
+### ============================================================================
+
+### Get Venue Profile Status
+GET {{baseUrl}}/api/venue/profile/status
+Authorization: Bearer {{venueToken}}
+Accept: application/json
+
+### Complete Football Court Profile
+POST {{baseUrl}}/api/venue/profile/complete/court
+Content-Type: application/json
+Authorization: Bearer {{venueToken}}
+
+{
+  "streetAddress": "123 Sport City Street",
+  "landmark": "Next to Sport City Mall",
+  "districtId": 5,
+  "latitude": 30.0444,
+  "longitude": 31.2357,
+  "workingHours": [
+    {
+      "dayOfWeek": 0,
+      "isClosed": false,
+      "openTime": "06:00:00",
+      "closeTime": "23:00:00"
+    },
+    {
+      "dayOfWeek": 1,
+      "isClosed": false,
+      "openTime": "06:00:00",
+      "closeTime": "23:00:00"
+    },
+    {
+      "dayOfWeek": 2,
+      "isClosed": false,
+      "openTime": "06:00:00",
+      "closeTime": "23:00:00"
+    },
+    {
+      "dayOfWeek": 3,
+      "isClosed": false,
+      "openTime": "06:00:00",
+      "closeTime": "23:00:00"
+    },
+    {
+      "dayOfWeek": 4,
+      "isClosed": false,
+      "openTime": "06:00:00",
+      "closeTime": "23:00:00"
+    },
+    {
+      "dayOfWeek": 5,
+      "isClosed": false,
+      "openTime": "06:00:00",
+      "closeTime": "00:00:00"
+    },
+    {
+      "dayOfWeek": 6,
+      "isClosed": false,
+      "openTime": "06:00:00",
+      "closeTime": "00:00:00"
+    }
+  ],
+  "morningHourPrice": 50.00,
+  "eveningHourPrice": 75.00,
+  "morningStartTime": "06:00:00",
+  "morningEndTime": "16:00:00",
+  "eveningStartTime": "16:00:00",
+  "eveningEndTime": "23:00:00",
+  "depositPercentage": 20.0,
+  "imageUrls": [
+    "https://example.com/court1.jpg",
+    "https://example.com/court2.jpg"
+  ]
+}
+
+### Complete PlayStation Venue Profile
+POST {{baseUrl}}/api/venue/profile/complete/playstation
+Content-Type: application/json
+Authorization: Bearer {{venueToken}}
+
+{
+  "streetAddress": "456 Gaming Street",
+  "landmark": "Above KFC",
+  "districtId": 8,
+  "latitude": 30.0644,
+  "longitude": 31.2457,
+  "workingHours": [
+    {
+      "dayOfWeek": 0,
+      "isClosed": false,
+      "openTime": "12:00:00",
+      "closeTime": "02:00:00"
+    },
+    {
+      "dayOfWeek": 1,
+      "isClosed": false,
+      "openTime": "12:00:00",
+      "closeTime": "02:00:00"
+    },
+    {
+      "dayOfWeek": 2,
+      "isClosed": false,
+      "openTime": "12:00:00",
+      "closeTime": "02:00:00"
+    },
+    {
+      "dayOfWeek": 3,
+      "isClosed": false,
+      "openTime": "12:00:00",
+      "closeTime": "02:00:00"
+    },
+    {
+      "dayOfWeek": 4,
+      "isClosed": false,
+      "openTime": "12:00:00",
+      "closeTime": "03:00:00"
+    },
+    {
+      "dayOfWeek": 5,
+      "isClosed": false,
+      "openTime": "12:00:00",
+      "closeTime": "03:00:00"
+    },
+    {
+      "dayOfWeek": 6,
+      "isClosed": false,
+      "openTime": "12:00:00",
+      "closeTime": "03:00:00"
+    }
+  ],
+  "numberOfRooms": 8,
+  "hasPS4": true,
+  "hasPS5": true,
+  "hasVIPRooms": true,
+  "hasCafe": true,
+  "hasWiFi": true,
+  "showsMatches": true,
+  "ps4Pricing": {
+    "classicRooms": {
+      "singleModeHourPrice": 15.00,
+      "multiplayerModeHourPrice": 25.00
+    },
+    "vipRooms": {
+      "singleModeHourPrice": 25.00,
+      "multiplayerModeHourPrice": 35.00
+    }
+  },
+  "ps5Pricing": {
+    "classicRooms": {
+      "singleModeHourPrice": 20.00,
+      "multiplayerModeHourPrice": 30.00
+    },
+    "vipRooms": {
+      "singleModeHourPrice": 30.00,
+      "multiplayerModeHourPrice": 40.00
+    }
+  },
+  "imageUrls": [
+    "https://example.com/ps_room1.jpg",
+    "https://example.com/ps_room2.jpg",
+    "https://example.com/ps_vip.jpg"
+  ]
+}
+
+### ============================================================================
+### 7. CLEAN ARCHITECTURE ENDPOINTS (New Implementation)
+### ============================================================================
+
+### Get Venue Profile (Clean Architecture)
+GET {{baseUrl}}/api/venue/profile
+Authorization: Bearer {{venueToken}}
+Accept: application/json
+
+### Complete Venue Profile (Clean Architecture)
+POST {{baseUrl}}/api/venue/profile/complete
+Content-Type: application/json
+Authorization: Bearer {{venueToken}}
+
+{
+  "streetAddress": "789 Clean Architecture Street",
+  "landmark": "New Implementation Building",
+  "districtId": 10,
+  "latitude": 30.0744,
+  "longitude": 31.2557,
+  "description": "Modern venue with clean architecture implementation",
+  "workingHours": [
+    {
+      "dayOfWeek": 1,
+      "openTime": "09:00:00",
+      "closeTime": "22:00:00",
+      "isClosed": false
+    },
+    {
+      "dayOfWeek": 2,
+      "openTime": "09:00:00",
+      "closeTime": "22:00:00",
+      "isClosed": false
+    },
+    {
+      "dayOfWeek": 3,
+      "openTime": "09:00:00",
+      "closeTime": "22:00:00",
+      "isClosed": false
+    },
+    {
+      "dayOfWeek": 4,
+      "openTime": "09:00:00",
+      "closeTime": "22:00:00",
+      "isClosed": false
+    },
+    {
+      "dayOfWeek": 5,
+      "openTime": "09:00:00",
+      "closeTime": "23:00:00",
+      "isClosed": false
+    },
+    {
+      "dayOfWeek": 6,
+      "openTime": "10:00:00",
+      "closeTime": "23:00:00",
+      "isClosed": false
+    },
+    {
+      "dayOfWeek": 0,
+      "openTime": "10:00:00",
+      "closeTime": "21:00:00",
+      "isClosed": false
+    }
+  ],
+  "pricing": [
+    {
+      "type": 1,
+      "price": 60.00,
+      "depositPercentage": 25.0
+    },
+    {
+      "type": 2,
+      "price": 80.00,
+      "depositPercentage": 25.0
+    }
+  ],
+  "imageUrls": [
+    "https://example.com/clean_arch_venue1.jpg",
+    "https://example.com/clean_arch_venue2.jpg"
+  ],
+  "playStationDetails": null
+}
+
+### Check Profile Completion Status (Clean Architecture)
+GET {{baseUrl}}/api/venue/profile/is-complete
+Authorization: Bearer {{venueToken}}
+Accept: application/json
+
+### ============================================================================
+### 8. VENUE SUB-USER MANAGEMENT
+### ============================================================================
+
+### Create Sub-User
+POST {{baseUrl}}/api/venue/sub-users
+Content-Type: application/json
+Authorization: Bearer {{venueToken}}
+
+{
+  "username": "manager001",
+  "password": "ManagerPass123!",
+  "role": "Manager",
+  "permissions": 31
+}
+
+### Get All Sub-Users
+GET {{baseUrl}}/api/venue/sub-users
+Authorization: Bearer {{venueToken}}
+Accept: application/json
+
+### Get Specific Sub-User
+GET {{baseUrl}}/api/venue/sub-users/{{subUserId}}
+Authorization: Bearer {{venueToken}}
+Accept: application/json
+
+### Update Sub-User
+PUT {{baseUrl}}/api/venue/sub-users/{{subUserId}}
+Content-Type: application/json
+Authorization: Bearer {{venueToken}}
+
+{
+  "role": "Employee",
+  "permissions": 15
+}
+
+### Delete Sub-User
+DELETE {{baseUrl}}/api/venue/sub-users/{{subUserId}}
+Authorization: Bearer {{venueToken}}
+
+### Sub-User Login
+POST {{baseUrl}}/api/auth/venue/sub-user/login
+Content-Type: application/json
+
+{
+  "username": "manager001",
+  "password": "ManagerPass123!",
+  "venueName": "Cairo United Football Club",
+  "deviceName": "Manager Terminal",
+  "deviceType": "Desktop"
+}
+
+### ============================================================================
+### 9. SOCIAL AUTHENTICATION
+### ============================================================================
+
+### Facebook Login (Venue)
+POST {{baseUrl}}/api/auth/social/facebook/venue
+Content-Type: application/json
+
+{
+  "accessToken": "facebook-access-token-here",
+  "venueName": "Social Media Venue",
+  "venueType": 1,
+  "phoneNumber": "+201234567893"
+}
+
+### Google Login (Customer)
+POST {{baseUrl}}/api/auth/social/google/customer
+Content-Type: application/json
+
+{
+  "accessToken": "google-access-token-here"
+}
+
+### Apple Login (Customer)
+POST {{baseUrl}}/api/auth/social/apple/customer
+Content-Type: application/json
+
+{
+  "identityToken": "apple-identity-token-here",
+  "authorizationCode": "apple-auth-code-here"
+}
+
+### ============================================================================
+### 10. SESSION MANAGEMENT
+### ============================================================================
+
+### Get Active Sessions
+GET {{baseUrl}}/api/auth/sessions
+Authorization: Bearer {{venueToken}}
+Accept: application/json
+
+### Terminate Specific Session
+DELETE {{baseUrl}}/api/auth/sessions/{{sessionId}}
+Authorization: Bearer {{venueToken}}
+
+### Terminate All Other Sessions
+DELETE {{baseUrl}}/api/auth/sessions/others
+Authorization: Bearer {{venueToken}}
+
+### ============================================================================
+### 11. ERROR SCENARIOS & EDGE CASES
+### ============================================================================
+
+### Invalid Authentication Token
+GET {{baseUrl}}/api/venue/profile/status
+Authorization: Bearer invalid-token-here
+Accept: application/json
+
+### Rate Limiting Test (Multiple rapid requests)
+GET {{baseUrl}}/api/test
+GET {{baseUrl}}/api/test
+GET {{baseUrl}}/api/test
+GET {{baseUrl}}/api/test
+GET {{baseUrl}}/api/test
+
+### Malformed Request Body
+POST {{baseUrl}}/api/auth/venue/login
+Content-Type: application/json
+
+{
+  "email": "invalid-email-format",
+  "password": ""
+}
+
+### Non-existent Resource
+GET {{baseUrl}}/api/venue/profile/non-existent-endpoint
+Authorization: Bearer {{venueToken}}
+Accept: application/json
+
+### SQL Injection Attempt (Should be safely handled)
+POST {{baseUrl}}/api/auth/venue/login
+Content-Type: application/json
+
+{
+  "email": "'; DROP TABLE Venues; --",
+  "password": "anything"
+}
+
+### XSS Attempt (Should be safely handled)
+POST {{baseUrl}}/api/auth/venue/register
+Content-Type: application/json
+
+{
+  "venueName": "<script>alert('xss')</script>",
+  "email": "test@test.com",
+  "password": "Test123!",
+  "confirmPassword": "Test123!",
+  "venueType": 1
+}
+
+### ============================================================================
+### 12. PERFORMANCE & LOAD TESTING SCENARIOS
+### ============================================================================
+
+### Concurrent Login Requests
+# @name concurrentLogin1
+POST {{baseUrl}}/api/auth/venue/login
+Content-Type: application/json
+
+{
+  "email": "owner@cairounited.eg",
+  "password": "SecurePass123!",
+  "deviceName": "Load Test 1",
+  "deviceType": "TestClient"
+}
+
+### Large Payload Test
+POST {{baseUrl}}/api/venue/profile/complete/court
+Content-Type: application/json
+Authorization: Bearer {{venueToken}}
+
+{
+  "streetAddress": "Very long street address that tests the system's ability to handle larger payloads and ensures that the API can process requests with substantial amounts of data without performance degradation",
+  "landmark": "Landmark with extensive description that includes multiple details about the location, surrounding buildings, nearby facilities, and other relevant information that customers might find useful when looking for the venue",
+  "districtId": 5,
+  "latitude": 30.0444,
+  "longitude": 31.2357,
+  "workingHours": [
+    {"dayOfWeek": 0, "isClosed": false, "openTime": "06:00:00", "closeTime": "23:00:00"},
+    {"dayOfWeek": 1, "isClosed": false, "openTime": "06:00:00", "closeTime": "23:00:00"},
+    {"dayOfWeek": 2, "isClosed": false, "openTime": "06:00:00", "closeTime": "23:00:00"},
+    {"dayOfWeek": 3, "isClosed": false, "openTime": "06:00:00", "closeTime": "23:00:00"},
+    {"dayOfWeek": 4, "isClosed": false, "openTime": "06:00:00", "closeTime": "23:00:00"},
+    {"dayOfWeek": 5, "isClosed": false, "openTime": "06:00:00", "closeTime": "00:00:00"},
+    {"dayOfWeek": 6, "isClosed": false, "openTime": "06:00:00", "closeTime": "00:00:00"}
+  ],
+  "morningHourPrice": 50.00,
+  "eveningHourPrice": 75.00,
+  "morningStartTime": "06:00:00",
+  "morningEndTime": "16:00:00",
+  "eveningStartTime": "16:00:00",
+  "eveningEndTime": "23:00:00",
+  "depositPercentage": 20.0,
+  "imageUrls": [
+    "https://example.com/image1.jpg",
+    "https://example.com/image2.jpg",
+    "https://example.com/image3.jpg",
+    "https://example.com/image4.jpg",
+    "https://example.com/image5.jpg"
+  ]
+}
+
+### ============================================================================
+### 13. CACHE TESTING
+### ============================================================================
+
+### Test Redis Cache (Location Data)
+GET {{baseUrl}}/api/location/governorates
+Accept: application/json
+
+### Repeat Same Request (Should use cache)
+GET {{baseUrl}}/api/location/governorates
+Accept: application/json
+
+### Test Cache Invalidation Scenario
+POST {{baseUrl}}/api/venue/profile/complete/court
+Content-Type: application/json
+Authorization: Bearer {{venueToken}}
+
+{
+  "streetAddress": "Cache Test Street",
+  "districtId": 5,
+  "latitude": 30.0444,
+  "longitude": 31.2357,
+  "workingHours": [
+    {"dayOfWeek": 1, "isClosed": false, "openTime": "09:00:00", "closeTime": "22:00:00"}
+  ],
+  "morningHourPrice": 40.00,
+  "eveningHourPrice": 60.00,
+  "morningStartTime": "09:00:00",
+  "morningEndTime": "17:00:00",
+  "eveningStartTime": "17:00:00",
+  "eveningEndTime": "22:00:00",
+  "depositPercentage": 15.0
+}
+
+### ============================================================================
+### TESTING NOTES & INSTRUCTIONS
+### ============================================================================
+
+###
+### SETUP INSTRUCTIONS:
+### 1. Ensure the E7GEZLY API is running on https://localhost:7001
+### 2. Update @baseUrl variable if using different URL
+### 3. Run "Register New Venue" and "Venue Login" requests first
+### 4. Copy the accessToken from login response to @venueToken variable
+### 5. Run requests in sequential order for best results
+###
+### EXPECTED BEHAVIORS:
+### - All auth requests should return JWT tokens
+### - Profile completion should work for both court and PlayStation venues
+### - Location services should return Egyptian geographic data
+### - Rate limiting should block excessive requests
+### - Invalid requests should return appropriate error messages
+### - Clean Architecture endpoints should mirror legacy functionality
+###
+### PERFORMANCE EXPECTATIONS:
+### - API responses should be under 200ms for most requests
+### - Profile completion should complete within 2 seconds
+### - Location geocoding may take 1-3 seconds (external service)
+### - Concurrent requests should be handled gracefully
+###
+### SECURITY TESTING:
+### - SQL injection attempts should be blocked
+### - XSS attempts should be sanitized
+### - Invalid tokens should return 401 Unauthorized
+### - Missing authentication should return 401 Unauthorized
+### - Rate limiting should protect against abuse
+###

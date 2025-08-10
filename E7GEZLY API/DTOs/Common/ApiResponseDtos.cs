@@ -5,7 +5,18 @@ namespace E7GEZLY_API.DTOs.Common
         bool Success,
         string Message,
         T? Data = default
-    );
+    )
+    {
+        public static ApiResponse<T> CreateSuccess(T data, string message = "Success")
+        {
+            return new ApiResponse<T>(true, message, data);
+        }
+
+        public static ApiResponse<T> CreateError(string message)
+        {
+            return new ApiResponse<T>(false, message, default);
+        }
+    };
 
     public record SuccessResponse(
         string Message,

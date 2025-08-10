@@ -1,147 +1,158 @@
-﻿using E7GEZLY_API.Data;
-using E7GEZLY_API.DTOs.Location;
-using E7GEZLY_API.Services.Location;
+using E7GEZLY_API.Application.Features.Location.Commands.GeocodeCoordinates;
+using E7GEZLY_API.Application.Features.Location.Commands.ValidateAddress;
+using E7GEZLY_API.Application.Features.Location.Queries.GetDistricts;
+using E7GEZLY_API.Application.Features.Location.Queries.GetDistrictFromCoordinates;
+using E7GEZLY_API.Application.Features.Location.Queries.GetGovernorates;
+using E7GEZLY_API.DTOs.Common;
+using MediatR;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 
 namespace E7GEZLY_API.Controllers
 {
+    /// <summary>
+    /// Location controller using Clean Architecture with MediatR
+    /// </summary>
     [ApiController]
     [Route("api/locations")]
     public class LocationController : ControllerBase
     {
-        private readonly ILocationService _locationService;
+        private readonly IMediator _mediator;
         private readonly ILogger<LocationController> _logger;
-        private readonly IGeocodingService _geocodingService;
-        private readonly AppDbContext _context;
 
-        public LocationController(ILocationService locationService, IGeocodingService geocodingService, ILogger<LocationController> logger, AppDbContext context)
+        public LocationController(IMediator mediator, ILogger<LocationController> logger)
         {
-            _locationService = locationService;
-            _geocodingService = geocodingService;
+            _mediator = mediator;
             _logger = logger;
-            _context = context;
         }
 
+        /// <summary>
+        /// Get all governorates
+        /// </summary>
+        /// <returns>List of governorates</returns>
         [HttpGet("governorates")]
         public async Task<IActionResult> GetGovernorates()
         {
-            try
+            _logger.LogInformation("Received request to get all governorates");
+
+            var query = new GetGovernoratesQuery();
+            var result = await _mediator.Send(query);
+
+            if (result.IsSuccess)
             {
-                var governorates = await _locationService.GetGovernoratesAsync();
-                return Ok(governorates);
+                return Ok(ApiResponse<object>.CreateSuccess(result.Data, "Governorates retrieved successfully"));
             }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error fetching governorates");
-                return StatusCode(500, new { message = "Error fetching governorates" });
-            }
+
+            _logger.LogWarning("Failed to retrieve governorates: {Error}", result.ErrorMessage);
+            return StatusCode(500, ApiResponse<object>.CreateError(result.ErrorMessage));
         }
 
+        /// <summary>
+        /// Get districts by governorate (optional)
+        /// </summary>
+        /// <param name="governorateId">Optional governorate ID filter</param>
+        /// <returns>List of districts</returns>
         [HttpGet("districts")]
         public async Task<IActionResult> GetDistricts([FromQuery] int? governorateId)
         {
-            try
+            _logger.LogInformation("Received request to get districts for governorate {GovernorateId}", governorateId);
+
+            var query = new GetDistrictsQuery(governorateId);
+            var result = await _mediator.Send(query);
+
+            if (result.IsSuccess)
             {
-                var districts = await _locationService.GetDistrictsAsync(governorateId);
-                return Ok(districts);
+                return Ok(ApiResponse<object>.CreateSuccess(result.Data, "Districts retrieved successfully"));
             }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error fetching districts");
-                return StatusCode(500, new { message = "Error fetching districts" });
-            }
+
+            _logger.LogWarning("Failed to retrieve districts: {Error}", result.ErrorMessage);
+            return StatusCode(500, ApiResponse<object>.CreateError(result.ErrorMessage));
         }
 
+        /// <summary>
+        /// Validate an address
+        /// </summary>
+        /// <param name="dto">Address validation data</param>
+        /// <returns>Validation result</returns>
         [HttpPost("validate")]
-        public async Task<IActionResult> ValidateAddress([FromBody] ValidateAddressDto dto)
+        public async Task<IActionResult> ValidateAddress([FromBody] ValidateAddressCommand command)
         {
-            try
+            _logger.LogInformation("Received request to validate address");
+
+            var result = await _mediator.Send(command);
+
+            if (result.IsSuccess)
             {
-                var result = await _locationService.ValidateAddressAsync(dto);
-                return Ok(result);
+                return Ok(ApiResponse<object>.CreateSuccess(result.Data, "Address validated successfully"));
             }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error validating address");
-                return StatusCode(500, new { message = "Error validating address" });
-            }
+
+            _logger.LogWarning("Address validation failed: {Error}", result.ErrorMessage);
+            return StatusCode(500, ApiResponse<object>.CreateError(result.ErrorMessage));
         }
 
+        /// <summary>
+        /// Geocode coordinates to address
+        /// </summary>
+        /// <param name="dto">Geocoding request data</param>
+        /// <returns>Geocoded address information</returns>
         [HttpPost("geocode")]
         public async Task<IActionResult> GeocodeCoordinates([FromBody] GeocodeRequestDto dto)
         {
-            try
-            {
-                var result = await _geocodingService.GetAddressFromCoordinatesAsync(dto.Latitude, dto.Longitude);
+            _logger.LogInformation("Received request to geocode coordinates {Latitude}, {Longitude}", 
+                dto.Latitude, dto.Longitude);
 
-                if (result == null)
-                {
-                    return NotFound(new { message = "Could not geocode location" });
-                }
+            var command = new GeocodeCoordinatesCommand(dto.Latitude, dto.Longitude);
+            var result = await _mediator.Send(command);
 
-                return Ok(new
-                {
-                    success = true,
-                    data = result,
-                    message = result.DistrictId.HasValue
-                        ? "District identified successfully"
-                        : "Location geocoded but district not matched"
-                });
-            }
-            catch (Exception ex)
+            if (result.IsSuccess)
             {
-                _logger.LogError(ex, "Error geocoding coordinates");
-                return StatusCode(500, new { message = "Error geocoding coordinates" });
+                return Ok(result.Data);
             }
+
+            if (result.ErrorMessage == "Could not geocode location")
+            {
+                return NotFound(ApiResponse<object>.CreateError("Could not geocode location"));
+            }
+
+            _logger.LogWarning("Geocoding failed: {Error}", result.ErrorMessage);
+            return StatusCode(500, ApiResponse<object>.CreateError(result.ErrorMessage));
         }
 
+        /// <summary>
+        /// Get district information from coordinates
+        /// </summary>
+        /// <param name="dto">Coordinate data</param>
+        /// <returns>District information</returns>
         [HttpPost("geocode/district")]
         public async Task<IActionResult> GetDistrictFromCoordinates([FromBody] GeocodeRequestDto dto)
         {
-            try
+            _logger.LogInformation("Received request to get district from coordinates {Latitude}, {Longitude}", 
+                dto.Latitude, dto.Longitude);
+
+            var query = new GetDistrictFromCoordinatesQuery(dto.Latitude, dto.Longitude);
+            var result = await _mediator.Send(query);
+
+            if (result.IsSuccess)
             {
-                var districtId = await _geocodingService.GetDistrictIdFromCoordinatesAsync(dto.Latitude, dto.Longitude);
-
-                if (districtId == null)
-                {
-                    return NotFound(new { message = "Could not determine district from coordinates" });
-                }
-
-                var district = await _context.Districts
-                   .Include(d => d.Governorate)
-                   .FirstOrDefaultAsync(d => d.Id == districtId.Value);
-
-                if (district == null)
-                {
-                    return NotFound(new { message = "District not found in database" });
-                }
-
-                return Ok(new
-                {
-                    success = true,
-                    districtId = districtId.Value,
-                    district = new
-                    {
-                        id = district!.Id,
-                        nameEn = district.NameEn,
-                        nameAr = district.NameAr,
-                        governorate = new
-                        {
-                            id = district.Governorate.Id,
-                            nameEn = district.Governorate.NameEn,
-                            nameAr = district.Governorate.NameAr
-                        }
-                    }
-                });
+                return Ok(result.Data);
             }
-            catch (Exception ex)
+
+            if (result.ErrorMessage == "Could not determine district from coordinates")
             {
-                _logger.LogError(ex, "Error determining district from coordinates");
-                return StatusCode(500, new { message = "Error determining district" });
+                return NotFound(ApiResponse<object>.CreateError("Could not determine district from coordinates"));
             }
+
+            if (result.ErrorMessage == "District not found in database")
+            {
+                return NotFound(ApiResponse<object>.CreateError("District not found in database"));
+            }
+
+            _logger.LogWarning("Failed to get district from coordinates: {Error}", result.ErrorMessage);
+            return StatusCode(500, ApiResponse<object>.CreateError("Error determining district"));
         }
 
+        /// <summary>
+        /// Geocoding request DTO
+        /// </summary>
         public record GeocodeRequestDto(double Latitude, double Longitude);
     }
 }

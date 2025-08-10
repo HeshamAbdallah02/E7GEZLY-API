@@ -28,5 +28,8 @@ namespace E7GEZLY_API.Models
         public TimeSpan? MorningEndTime { get; set; }
         public TimeSpan? EveningStartTime { get; set; }
         public TimeSpan? EveningEndTime { get; set; }
+        
+        // Status field for handler compatibility
+        public bool IsActive { get; set; } = true;
     }
 }

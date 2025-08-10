@@ -5,7 +5,6 @@ using E7GEZLY_API.Domain.Enums;
 using E7GEZLY_API.Domain.Repositories;
 using E7GEZLY_API.Domain.ValueObjects;
 using Microsoft.EntityFrameworkCore;
-using System.Reflection;
 
 namespace E7GEZLY_API.Infrastructure.Repositories
 {
@@ -24,9 +23,9 @@ namespace E7GEZLY_API.Infrastructure.Repositories
         }
 
         // Query operations
-        public async Task<Venue?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
+        public async Task<Domain.Entities.Venue?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
         {
-            var venue = await _context.Venues
+            var efVenue = await _context.Venues
                 .Include(v => v.District)
                     .ThenInclude(d => d!.Governorate)
                 .Include(v => v.WorkingHours)
@@ -37,10 +36,10 @@ namespace E7GEZLY_API.Infrastructure.Repositories
                 .Include(v => v.AuditLogs)
                 .FirstOrDefaultAsync(v => v.Id == id, cancellationToken);
 
-            return venue != null ? MapToDomainVenue(venue) : null;
+            return efVenue;
         }
 
-        public async Task<Venue?> GetByUserIdAsync(string userId, CancellationToken cancellationToken = default)
+        public async Task<Domain.Entities.Venue?> GetByUserIdAsync(string userId, CancellationToken cancellationToken = default)
         {
             // In the E7GEZLY system, ApplicationUser has a VenueId property that establishes the relationship
             // We need to find the venue associated with this user
@@ -50,7 +49,7 @@ namespace E7GEZLY_API.Infrastructure.Repositories
             if (user?.VenueId == null)
                 return null;
 
-            var venue = await _context.Venues
+            var efVenue = await _context.Venues
                 .Include(v => v.District)
                     .ThenInclude(d => d!.Governorate)
                 .Include(v => v.WorkingHours)
@@ -61,12 +60,12 @@ namespace E7GEZLY_API.Infrastructure.Repositories
                 .Include(v => v.AuditLogs)
                 .FirstOrDefaultAsync(v => v.Id == user.VenueId.Value, cancellationToken);
 
-            return venue != null ? MapToDomainVenue(venue) : null;
+            return efVenue;
         }
 
         public async Task<bool> ExistsWithNameAsync(string name, Guid? excludeId = null, CancellationToken cancellationToken = default)
         {
-            var query = _context.Venues.Where(v => v.Name == name);
+            var query = _context.Venues.Where(v => v.Name.Name == name);
             if (excludeId.HasValue)
             {
                 query = query.Where(v => v.Id != excludeId.Value);
@@ -75,18 +74,18 @@ namespace E7GEZLY_API.Infrastructure.Repositories
         }
 
         // Command operations  
-        public async Task<Venue> AddAsync(Venue venue, CancellationToken cancellationToken = default)
+        public async Task<Domain.Entities.Venue> AddAsync(Domain.Entities.Venue venue, CancellationToken cancellationToken = default)
         {
-            var efVenue = MapToEfVenue(venue);
-            var entry = await _context.Venues.AddAsync(efVenue, cancellationToken);
-            return MapToDomainVenue(entry.Entity);
+            // Domain entities are used directly with EF Core
+            var entry = await _context.Venues.AddAsync(venue, cancellationToken);
+            return entry.Entity;
         }
 
-        public async Task<Venue> UpdateAsync(Venue venue, CancellationToken cancellationToken = default)
+        public async Task<Domain.Entities.Venue> UpdateAsync(Domain.Entities.Venue venue, CancellationToken cancellationToken = default)
         {
-            var efVenue = MapToEfVenue(venue);
-            _context.Venues.Update(efVenue);
-            return MapToDomainVenue(efVenue);
+            // Domain entities are used directly with EF Core
+            _context.Venues.Update(venue);
+            return venue;
         }
 
         public async Task DeleteAsync(Guid id, CancellationToken cancellationToken = default)
@@ -99,27 +98,27 @@ namespace E7GEZLY_API.Infrastructure.Repositories
         }
 
         // Basic bulk operations
-        public async Task<IEnumerable<Venue>> GetMultipleAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken = default)
+        public async Task<IEnumerable<Domain.Entities.Venue>> GetMultipleAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken = default)
         {
-            var venues = await _context.Venues
+            var efVenues = await _context.Venues
                 .Include(v => v.District)
                     .ThenInclude(d => d!.Governorate)
                 .Where(v => ids.Contains(v.Id))
                 .ToListAsync(cancellationToken);
 
-            return venues.Select(v => MapToDomainVenue(v));
+            return efVenues;
         }
 
-        public async Task<IEnumerable<Venue>> GetAllAsync(int skip = 0, int take = 50, CancellationToken cancellationToken = default)
+        public async Task<IEnumerable<Domain.Entities.Venue>> GetAllAsync(int skip = 0, int take = 50, CancellationToken cancellationToken = default)
         {
-            var venues = await _context.Venues
+            var efVenues = await _context.Venues
                 .Include(v => v.District)
                     .ThenInclude(d => d!.Governorate)
                 .Skip(skip)
                 .Take(take)
                 .ToListAsync(cancellationToken);
 
-            return venues.Select(v => MapToDomainVenue(v));
+            return efVenues;
         }
 
         public async Task<int> GetTotalCountAsync(CancellationToken cancellationToken = default)
@@ -127,58 +126,174 @@ namespace E7GEZLY_API.Infrastructure.Repositories
             return await _context.Venues.CountAsync(cancellationToken);
         }
 
-        // Stub implementations for methods that need to be implemented later
-        public Task<IEnumerable<Venue>> GetByTypeAsync(VenueType venueType, CancellationToken cancellationToken = default)
+        // Venue search and filtering implementations
+        public async Task<IEnumerable<Domain.Entities.Venue>> GetByTypeAsync(VenueType venueType, CancellationToken cancellationToken = default)
         {
-            throw new NotImplementedException("GetByTypeAsync will be implemented when needed");
+            var efVenues = await _context.Venues
+                .Where(v => !v.IsDeleted && v.IsActive && v.VenueType == venueType)
+                .Include(v => v.District)
+                    .ThenInclude(d => d!.Governorate)
+                .Include(v => v.Images.Where(vi => vi.IsPrimary))
+                .Include(v => v.WorkingHours)
+                .OrderBy(v => v.Name)
+                .ToListAsync(cancellationToken);
+
+            return efVenues;
         }
 
-        public Task<IEnumerable<Venue>> GetByDistrictAsync(int districtSystemId, CancellationToken cancellationToken = default)
+        public async Task<IEnumerable<Domain.Entities.Venue>> GetByDistrictAsync(int districtSystemId, CancellationToken cancellationToken = default)
         {
-            throw new NotImplementedException("GetByDistrictAsync will be implemented when needed");
+            var efVenues = await _context.Venues
+                .Where(v => !v.IsDeleted && v.IsActive && v.DistrictSystemId == districtSystemId)
+                .Include(v => v.District)
+                    .ThenInclude(d => d!.Governorate)
+                .Include(v => v.Images.Where(vi => vi.IsPrimary))
+                .Include(v => v.WorkingHours)
+                .OrderBy(v => v.Name)
+                .ToListAsync(cancellationToken);
+
+            return efVenues;
         }
 
-        public Task<IEnumerable<Venue>> GetWithinRadiusAsync(Coordinates center, double radiusKm, CancellationToken cancellationToken = default)
+        public async Task<IEnumerable<Domain.Entities.Venue>> GetWithinRadiusAsync(Coordinates center, double radiusKm, CancellationToken cancellationToken = default)
         {
-            throw new NotImplementedException("GetWithinRadiusAsync will be implemented when needed");
+            if (radiusKm <= 0)
+                throw new ArgumentException("Radius must be greater than zero", nameof(radiusKm));
+
+            // Convert to raw coordinates for the query
+            var centerLat = center.Latitude;
+            var centerLng = center.Longitude;
+            
+            // Pre-filter venues using a bounding box for performance (faster than calculating distance for all venues)
+            // Approximate degrees per kilometer (varies by latitude, but close enough for Egypt)
+            var latDelta = radiusKm / 111.0; // ~111 km per degree latitude
+            var lngDelta = radiusKm / (111.0 * Math.Cos(centerLat * Math.PI / 180)); // Adjusted for longitude at this latitude
+            
+            var efVenues = await _context.Venues
+                .Where(v => !v.IsDeleted && v.IsActive && 
+                           v.Address.Coordinates != null &&
+                           v.Address.Coordinates.Latitude >= centerLat - latDelta && v.Address.Coordinates.Latitude <= centerLat + latDelta &&
+                           v.Address.Coordinates.Longitude >= centerLng - lngDelta && v.Address.Coordinates.Longitude <= centerLng + lngDelta)
+                .Include(v => v.District)
+                    .ThenInclude(d => d!.Governorate)
+                .Include(v => v.Images.Where(vi => vi.IsPrimary))
+                .Include(v => v.WorkingHours)
+                .ToListAsync(cancellationToken);
+
+            // Calculate precise distance using Haversine formula and filter
+            var venuesWithDistance = efVenues
+                .Select(v => new { 
+                    Venue = v, 
+                    Distance = CalculateDistance(centerLat, centerLng, v.Address.Coordinates!.Latitude, v.Address.Coordinates.Longitude) 
+                })
+                .Where(vd => vd.Distance <= radiusKm)
+                .OrderBy(vd => vd.Distance)
+                .Select(vd => vd.Venue);
+
+            return venuesWithDistance;
         }
 
-        public Task<IEnumerable<Venue>> GetWithFeaturesAsync(VenueFeatures features, CancellationToken cancellationToken = default)
+        /// <summary>
+        /// Calculate distance between two points using Haversine formula
+        /// Optimized for Egyptian geographic coordinates
+        /// </summary>
+        private static double CalculateDistance(double lat1, double lng1, double lat2, double lng2)
         {
-            throw new NotImplementedException("GetWithFeaturesAsync will be implemented when needed");
+            const double earthRadiusKm = 6371;
+            
+            var dLat = (lat2 - lat1) * Math.PI / 180;
+            var dLng = (lng2 - lng1) * Math.PI / 180;
+            
+            var a = Math.Sin(dLat / 2) * Math.Sin(dLat / 2) +
+                    Math.Cos(lat1 * Math.PI / 180) * Math.Cos(lat2 * Math.PI / 180) *
+                    Math.Sin(dLng / 2) * Math.Sin(dLng / 2);
+            
+            var c = 2 * Math.Atan2(Math.Sqrt(a), Math.Sqrt(1 - a));
+            
+            return earthRadiusKm * c;
         }
 
-        public Task<IEnumerable<Venue>> SearchByNameAsync(string searchTerm, CancellationToken cancellationToken = default)
+        public async Task<IEnumerable<Domain.Entities.Venue>> GetWithFeaturesAsync(VenueFeatures features, CancellationToken cancellationToken = default)
         {
-            throw new NotImplementedException("SearchByNameAsync will be implemented when needed");
+            var efVenues = await _context.Venues
+                .Where(v => !v.IsDeleted && v.IsActive && 
+                           (v.Features & features) == features)
+                .Include(v => v.District)
+                    .ThenInclude(d => d!.Governorate)
+                .Include(v => v.Images.Where(vi => vi.IsPrimary))
+                .Include(v => v.WorkingHours)
+                .OrderBy(v => v.Name.Name)
+                .ToListAsync(cancellationToken);
+
+            return efVenues;
         }
 
-        public Task<IEnumerable<Venue>> GetIncompleteProfilesAsync(CancellationToken cancellationToken = default)
+        public async Task<IEnumerable<Domain.Entities.Venue>> SearchByNameAsync(string searchTerm, CancellationToken cancellationToken = default)
         {
-            throw new NotImplementedException("GetIncompleteProfilesAsync will be implemented when needed");
+            if (string.IsNullOrWhiteSpace(searchTerm))
+                return Enumerable.Empty<Domain.Entities.Venue>();
+
+            // Use contains for case-insensitive search (works with Arabic and English)
+            var efVenues = await _context.Venues
+                .Where(v => !v.IsDeleted && v.IsActive && 
+                           (v.Name.Name.Contains(searchTerm) ||
+                            (v.Description != null && v.Description.Contains(searchTerm)) ||
+                            (v.Address.StreetAddress != null && v.Address.StreetAddress.Contains(searchTerm)) ||
+                            (v.Address.Landmark != null && v.Address.Landmark.Contains(searchTerm))))
+                .Include(v => v.District)
+                    .ThenInclude(d => d!.Governorate)
+                .Include(v => v.Images.Where(vi => vi.IsPrimary))
+                .OrderBy(v => v.Name.Name)
+                .Take(50) // Limit results for performance
+                .ToListAsync(cancellationToken);
+
+            return efVenues;
         }
 
-        public Task<IEnumerable<Venue>> GetCompletedProfilesAsync(CancellationToken cancellationToken = default)
+        public async Task<IEnumerable<Domain.Entities.Venue>> GetIncompleteProfilesAsync(CancellationToken cancellationToken = default)
         {
-            throw new NotImplementedException("GetCompletedProfilesAsync will be implemented when needed");
+            var efVenues = await _context.Venues
+                .Where(v => !v.IsDeleted && v.IsActive && !v.IsProfileComplete)
+                .Include(v => v.District)
+                    .ThenInclude(d => d!.Governorate)
+                .Include(v => v.Images.Where(vi => vi.IsPrimary))
+                .Include(v => v.WorkingHours)
+                .Include(v => v.Pricing)
+                .OrderBy(v => v.CreatedAt) // Show oldest incomplete profiles first
+                .ToListAsync(cancellationToken);
+
+            return efVenues;
         }
 
-        public async Task<VenueSubUser?> GetSubUserByIdAsync(Guid subUserId, CancellationToken cancellationToken = default)
+        public async Task<IEnumerable<Domain.Entities.Venue>> GetCompletedProfilesAsync(CancellationToken cancellationToken = default)
+        {
+            var efVenues = await _context.Venues
+                .Where(v => !v.IsDeleted && v.IsActive && v.IsProfileComplete)
+                .Include(v => v.District)
+                    .ThenInclude(d => d!.Governorate)
+                .Include(v => v.Images.Where(vi => vi.IsPrimary))
+                .Include(v => v.WorkingHours)
+                .Include(v => v.Pricing)
+                .OrderByDescending(v => v.UpdatedAt) // Show recently updated profiles first
+                .ToListAsync(cancellationToken);
+
+            return efVenues;
+        }
+
+        public async Task<Domain.Entities.VenueSubUser?> GetSubUserByIdAsync(Guid subUserId, CancellationToken cancellationToken = default)
         {
             var efSubUser = await _context.VenueSubUsers
-                .Include(su => su.Venue)
                 .FirstOrDefaultAsync(su => su.Id == subUserId, cancellationToken);
 
-            return efSubUser != null ? MapToDomainVenueSubUser(efSubUser) : null;
+            return efSubUser;
         }
 
-        public async Task<VenueSubUser?> GetSubUserByUsernameAsync(Guid venueId, string username, CancellationToken cancellationToken = default)
+        public async Task<Domain.Entities.VenueSubUser?> GetSubUserByUsernameAsync(Guid venueId, string username, CancellationToken cancellationToken = default)
         {
             var efSubUser = await _context.VenueSubUsers
-                .Include(su => su.Venue)
                 .FirstOrDefaultAsync(su => su.VenueId == venueId && su.Username == username, cancellationToken);
 
-            return efSubUser != null ? MapToDomainVenueSubUser(efSubUser) : null;
+            return efSubUser;
         }
 
         public async Task<bool> SubUserUsernameExistsInVenueAsync(Guid venueId, string username, Guid? excludeSubUserId = null, CancellationToken cancellationToken = default)
@@ -194,10 +309,9 @@ namespace E7GEZLY_API.Infrastructure.Repositories
             return await query.AnyAsync(cancellationToken);
         }
 
-        public async Task<IEnumerable<VenueSubUser>> GetVenueSubUsersAsync(Guid venueId, bool includeInactive = false, CancellationToken cancellationToken = default)
+        public async Task<IEnumerable<Domain.Entities.VenueSubUser>> GetVenueSubUsersAsync(Guid venueId, bool includeInactive = false, CancellationToken cancellationToken = default)
         {
             var query = _context.VenueSubUsers
-                .Include(su => su.Venue)
                 .Where(su => su.VenueId == venueId);
 
             if (!includeInactive)
@@ -206,109 +320,185 @@ namespace E7GEZLY_API.Infrastructure.Repositories
             }
 
             var efSubUsers = await query.ToListAsync(cancellationToken);
-            return efSubUsers.Select(su => MapToDomainVenueSubUser(su));
+            return efSubUsers;
         }
 
-        public Task<IEnumerable<VenueSubUser>> GetSubUsersByVenueIdAsync(Guid venueId, CancellationToken cancellationToken = default)
+        public Task<IEnumerable<Domain.Entities.VenueSubUser>> GetSubUsersByVenueIdAsync(Guid venueId, CancellationToken cancellationToken = default)
         {
             // Alias method for compatibility - delegates to GetVenueSubUsersAsync
             return GetVenueSubUsersAsync(venueId, false, cancellationToken);
         }
 
-        public async Task<VenueSubUser?> GetFounderAdminAsync(Guid venueId, CancellationToken cancellationToken = default)
+        public async Task<Domain.Entities.VenueSubUser?> GetFounderAdminAsync(Guid venueId, CancellationToken cancellationToken = default)
         {
-            var efSubUser = await _context.VenueSubUsers
-                .Include(su => su.Venue)
+            var efFounderAdmin = await _context.VenueSubUsers
                 .FirstOrDefaultAsync(su => su.VenueId == venueId && su.IsFounderAdmin, cancellationToken);
 
-            return efSubUser != null ? MapToDomainVenueSubUser(efSubUser) : null;
+            return efFounderAdmin;
         }
 
-        public async Task<VenueSubUserSession?> GetSubUserSessionAsync(Guid sessionId, CancellationToken cancellationToken = default)
+        public async Task<Domain.Entities.VenueSubUserSession?> GetSubUserSessionAsync(Guid sessionId, CancellationToken cancellationToken = default)
         {
             var efSession = await _context.VenueSubUserSessions
                 .FirstOrDefaultAsync(s => s.Id == sessionId, cancellationToken);
 
-            return efSession != null ? MapToDomainVenueSubUserSession(efSession) : null;
+            return efSession;
         }
 
-        public async Task<VenueSubUserSession?> GetActiveSubUserSessionByTokenAsync(string refreshToken, CancellationToken cancellationToken = default)
+        public async Task<Domain.Entities.VenueSubUserSession?> GetActiveSubUserSessionByTokenAsync(string refreshToken, CancellationToken cancellationToken = default)
         {
             var efSession = await _context.VenueSubUserSessions
                 .FirstOrDefaultAsync(s => s.RefreshToken == refreshToken && 
                                          s.IsActive && 
                                          s.RefreshTokenExpiry > DateTime.UtcNow, cancellationToken);
 
-            return efSession != null ? MapToDomainVenueSubUserSession(efSession) : null;
+            return efSession;
         }
 
-        public async Task<IEnumerable<VenueSubUserSession>> GetActiveSubUserSessionsAsync(Guid subUserId, CancellationToken cancellationToken = default)
+        public async Task<IEnumerable<Domain.Entities.VenueSubUserSession>> GetActiveSubUserSessionsAsync(Guid subUserId, CancellationToken cancellationToken = default)
         {
             var efSessions = await _context.VenueSubUserSessions
                 .Where(s => s.SubUserId == subUserId && s.IsActive && s.RefreshTokenExpiry > DateTime.UtcNow)
                 .ToListAsync(cancellationToken);
 
-            return efSessions.Select(s => MapToDomainVenueSubUserSession(s));
+            return efSessions;
         }
 
-        public Task<IEnumerable<VenueAuditLog>> GetAuditLogsAsync(Guid venueId, int skip = 0, int take = 50, CancellationToken cancellationToken = default)
+        public async Task<IEnumerable<Domain.Entities.VenueAuditLog>> GetAuditLogsAsync(Guid venueId, int skip = 0, int take = 50, CancellationToken cancellationToken = default)
         {
-            throw new NotImplementedException("GetAuditLogsAsync will be implemented when needed");
+            var efAuditLogs = await _context.VenueAuditLogs
+                .Where(al => al.VenueId == venueId)
+                .OrderByDescending(al => al.Timestamp)
+                .Skip(skip)
+                .Take(take)
+                .ToListAsync(cancellationToken);
+
+            return efAuditLogs;
         }
 
-        public Task<IEnumerable<VenueAuditLog>> GetAuditLogsByActionAsync(Guid venueId, string action, CancellationToken cancellationToken = default)
+        public async Task<IEnumerable<Domain.Entities.VenueAuditLog>> GetAuditLogsByActionAsync(Guid venueId, string action, CancellationToken cancellationToken = default)
         {
-            throw new NotImplementedException("GetAuditLogsByActionAsync will be implemented when needed");
+            var efAuditLogs = await _context.VenueAuditLogs
+                .Where(al => al.VenueId == venueId && al.Action == action)
+                .OrderByDescending(al => al.Timestamp)
+                .ToListAsync(cancellationToken);
+
+            return efAuditLogs;
         }
 
-        public Task<IEnumerable<VenueAuditLog>> GetAuditLogsBySubUserAsync(Guid subUserId, CancellationToken cancellationToken = default)
+        public async Task<IEnumerable<Domain.Entities.VenueAuditLog>> GetAuditLogsBySubUserAsync(Guid subUserId, CancellationToken cancellationToken = default)
         {
-            throw new NotImplementedException("GetAuditLogsBySubUserAsync will be implemented when needed");
+            var efAuditLogs = await _context.VenueAuditLogs
+                .Where(al => al.SubUserId == subUserId)
+                .OrderByDescending(al => al.Timestamp)
+                .ToListAsync(cancellationToken);
+
+            return efAuditLogs;
         }
 
-        public Task<IEnumerable<VenueAuditLog>> GetAuditLogsByDateRangeAsync(Guid venueId, DateTime startDate, DateTime endDate, CancellationToken cancellationToken = default)
+        public async Task<IEnumerable<Domain.Entities.VenueAuditLog>> GetAuditLogsByDateRangeAsync(Guid venueId, DateTime startDate, DateTime endDate, CancellationToken cancellationToken = default)
         {
-            throw new NotImplementedException("GetAuditLogsByDateRangeAsync will be implemented when needed");
+            // Ensure proper date range
+            if (endDate <= startDate)
+                throw new ArgumentException("End date must be after start date", nameof(endDate));
+
+            var efAuditLogs = await _context.VenueAuditLogs
+                .Where(al => al.VenueId == venueId && 
+                           al.Timestamp >= startDate && 
+                           al.Timestamp <= endDate)
+                .OrderByDescending(al => al.Timestamp)
+                .ToListAsync(cancellationToken);
+
+            return efAuditLogs;
         }
 
-        public Task<IEnumerable<VenueWorkingHours>> GetWorkingHoursAsync(Guid venueId, CancellationToken cancellationToken = default)
+        public async Task<IEnumerable<Domain.Entities.VenueWorkingHours>> GetWorkingHoursAsync(Guid venueId, CancellationToken cancellationToken = default)
         {
-            throw new NotImplementedException("GetWorkingHoursAsync will be implemented when needed");
+            var efWorkingHours = await _context.VenueWorkingHours
+                .Where(wh => wh.VenueId == venueId && wh.IsActive)
+                .OrderBy(wh => wh.DayOfWeek)
+                .ToListAsync(cancellationToken);
+
+            return efWorkingHours;
         }
 
-        public Task<VenueWorkingHours?> GetWorkingHoursForDayAsync(Guid venueId, DayOfWeek dayOfWeek, CancellationToken cancellationToken = default)
+        public async Task<Domain.Entities.VenueWorkingHours?> GetWorkingHoursForDayAsync(Guid venueId, DayOfWeek dayOfWeek, CancellationToken cancellationToken = default)
         {
-            throw new NotImplementedException("GetWorkingHoursForDayAsync will be implemented when needed");
+            var efWorkingHours = await _context.VenueWorkingHours
+                .FirstOrDefaultAsync(wh => wh.VenueId == venueId && wh.DayOfWeek == dayOfWeek && wh.IsActive, cancellationToken);
+
+            return efWorkingHours;
         }
 
-        public Task<IEnumerable<VenuePricing>> GetPricingAsync(Guid venueId, CancellationToken cancellationToken = default)
+        public async Task<IEnumerable<Domain.Entities.VenuePricing>> GetPricingAsync(Guid venueId, CancellationToken cancellationToken = default)
         {
-            throw new NotImplementedException("GetPricingAsync will be implemented when needed");
+            var efPricing = await _context.VenuePricing
+                .Where(p => p.VenueId == venueId && p.IsActive)
+                .OrderBy(p => p.Type)
+                .ThenBy(p => p.PlayStationModel)
+                .ThenBy(p => p.RoomType)
+                .ToListAsync(cancellationToken);
+
+            return efPricing;
         }
 
-        public Task<IEnumerable<VenuePricing>> GetPricingByTypeAsync(Guid venueId, PricingType pricingType, CancellationToken cancellationToken = default)
+        public async Task<IEnumerable<Domain.Entities.VenuePricing>> GetPricingByTypeAsync(Guid venueId, PricingType pricingType, CancellationToken cancellationToken = default)
         {
-            throw new NotImplementedException("GetPricingByTypeAsync will be implemented when needed");
+            var efPricing = await _context.VenuePricing
+                .Where(p => p.VenueId == venueId && p.Type == pricingType && p.IsActive)
+                .OrderBy(p => p.PlayStationModel)
+                .ThenBy(p => p.RoomType)
+                .ThenBy(p => p.TimeSlotType)
+                .ToListAsync(cancellationToken);
+
+            return efPricing;
         }
 
-        public Task<IEnumerable<VenueImage>> GetImagesAsync(Guid venueId, CancellationToken cancellationToken = default)
+        public async Task<IEnumerable<Domain.Entities.VenueImage>> GetImagesAsync(Guid venueId, CancellationToken cancellationToken = default)
         {
-            throw new NotImplementedException("GetImagesAsync will be implemented when needed");
+            var efImages = await _context.VenueImages
+                .Where(i => i.VenueId == venueId && i.IsActive)
+                .OrderBy(i => i.DisplayOrder)
+                .ThenBy(i => i.CreatedAt)
+                .ToListAsync(cancellationToken);
+
+            return efImages;
         }
 
-        public Task<VenueImage?> GetPrimaryImageAsync(Guid venueId, CancellationToken cancellationToken = default)
+        public async Task<Domain.Entities.VenueImage?> GetPrimaryImageAsync(Guid venueId, CancellationToken cancellationToken = default)
         {
-            throw new NotImplementedException("GetPrimaryImageAsync will be implemented when needed");
+            var efImage = await _context.VenueImages
+                .FirstOrDefaultAsync(i => i.VenueId == venueId && i.IsPrimary && i.IsActive, cancellationToken);
+
+            return efImage;
         }
 
-        public Task<VenuePlayStationDetails?> GetPlayStationDetailsAsync(Guid venueId, CancellationToken cancellationToken = default)
+        public async Task<Domain.Entities.VenuePlayStationDetails?> GetPlayStationDetailsAsync(Guid venueId, CancellationToken cancellationToken = default)
         {
-            throw new NotImplementedException("GetPlayStationDetailsAsync will be implemented when needed");
+            var efPlayStationDetails = await _context.VenuePlayStationDetails
+                .FirstOrDefaultAsync(psd => psd.VenueId == venueId, cancellationToken);
+
+            return efPlayStationDetails;
         }
 
-        public Task CleanupExpiredSubUserSessionsAsync(CancellationToken cancellationToken = default)
+        public async Task CleanupExpiredSubUserSessionsAsync(CancellationToken cancellationToken = default)
         {
-            throw new NotImplementedException("CleanupExpiredSubUserSessionsAsync will be implemented when needed");
+            var cutoffTime = DateTime.UtcNow;
+            
+            // Get all expired sessions that are still marked as active
+            var expiredSessions = await _context.VenueSubUserSessions
+                .Where(s => s.IsActive && 
+                           (s.RefreshTokenExpiry <= cutoffTime || 
+                            s.LastActivityAt <= cutoffTime.AddDays(-30))) // Also cleanup sessions with no activity for 30 days
+                .ToListAsync(cancellationToken);
+
+            // Mark expired sessions as inactive
+            foreach (var session in expiredSessions)
+            {
+                session.Logout("Session expired");
+            }
+
+            // Note: SaveChanges will be called by the UnitOfWork pattern
         }
 
         public async Task EndAllSubUserSessionsAsync(Guid subUserId, CancellationToken cancellationToken = default)
@@ -319,158 +509,123 @@ namespace E7GEZLY_API.Infrastructure.Repositories
 
             foreach (var session in sessions)
             {
-                session.IsActive = false;
-                session.LogoutAt = DateTime.UtcNow;
-                session.LogoutReason = "Admin logout";
-                session.UpdatedAt = DateTime.UtcNow;
+                session.Logout("Admin logout");
             }
         }
 
-        public Task<Dictionary<VenueType, int>> GetVenueCountsByTypeAsync(CancellationToken cancellationToken = default)
+        public async Task<Dictionary<VenueType, int>> GetVenueCountsByTypeAsync(CancellationToken cancellationToken = default)
         {
-            throw new NotImplementedException("GetVenueCountsByTypeAsync will be implemented when needed");
-        }
+            var venueCounts = await _context.Venues
+                .Where(v => !v.IsDeleted && v.IsActive)
+                .GroupBy(v => v.VenueType)
+                .Select(g => new { VenueType = g.Key, Count = g.Count() })
+                .ToListAsync(cancellationToken);
 
-        public Task<int> GetProfileCompletionRateAsync(CancellationToken cancellationToken = default)
-        {
-            throw new NotImplementedException("GetProfileCompletionRateAsync will be implemented when needed");
-        }
-
-        public Task<IEnumerable<Venue>> GetMostPopularVenuesAsync(int count = 10, CancellationToken cancellationToken = default)
-        {
-            throw new NotImplementedException("GetMostPopularVenuesAsync will be implemented when needed");
-        }
-
-        public Task<Dictionary<string, int>> GetVenuesByDistrictAsync(CancellationToken cancellationToken = default)
-        {
-            throw new NotImplementedException("GetVenuesByDistrictAsync will be implemented when needed");
-        }
-
-        public Task<bool> CanCreateSubUserAsync(Guid venueId, CancellationToken cancellationToken = default)
-        {
-            throw new NotImplementedException("CanCreateSubUserAsync will be implemented when needed");
-        }
-
-        public Task<int> GetSubUserCountAsync(Guid venueId, CancellationToken cancellationToken = default)
-        {
-            throw new NotImplementedException("GetSubUserCountAsync will be implemented when needed");
-        }
-
-        public Task<bool> HasActiveBookingsAsync(Guid venueId, CancellationToken cancellationToken = default)
-        {
-            throw new NotImplementedException("HasActiveBookingsAsync will be implemented when needed");
-        }
-
-        // Simple mapping methods - to be enhanced with AutoMapper later
-        private Venue MapToDomainVenue(Models.Venue efVenue)
-        {
-            return Venue.CreateExistingVenue(
-                efVenue.Id,
-                efVenue.Name,
-                (Domain.Enums.VenueType)efVenue.VenueType,
-                (Domain.Enums.VenueFeatures)efVenue.Features,
-                efVenue.StreetAddress,
-                efVenue.Landmark,
-                efVenue.Latitude,
-                efVenue.Longitude,
-                efVenue.DistrictId,
-                efVenue.IsProfileComplete,
-                efVenue.RequiresSubUserSetup,
-                efVenue.CreatedAt,
-                efVenue.UpdatedAt
-            );
-        }
-
-        private Models.Venue MapToEfVenue(Venue domainVenue)
-        {
-            return new Models.Venue
-            {
-                Id = domainVenue.Id,
-                Name = domainVenue.Name.Name,
-                VenueType = (VenueType)domainVenue.VenueType,
-                Features = (VenueFeatures)domainVenue.Features,
-                StreetAddress = domainVenue.Address.StreetAddress,
-                Landmark = domainVenue.Address.Landmark,
-                Latitude = domainVenue.Address.Coordinates?.Latitude,
-                Longitude = domainVenue.Address.Coordinates?.Longitude,
-                DistrictId = domainVenue.DistrictSystemId,
-                PhoneNumber = domainVenue.PhoneNumber,
-                WhatsAppNumber = domainVenue.WhatsAppNumber,
-                FacebookUrl = domainVenue.FacebookUrl,
-                InstagramUrl = domainVenue.InstagramUrl,
-                Description = domainVenue.Description,
-                IsActive = domainVenue.IsActive,
-                IsProfileComplete = domainVenue.IsProfileComplete,
-                RequiresSubUserSetup = domainVenue.RequiresSubUserSetup,
-                CreatedAt = domainVenue.CreatedAt,
-                UpdatedAt = domainVenue.UpdatedAt
-            };
-        }
-
-        // Sub-user mapping methods
-        private Domain.Entities.VenueSubUser MapToDomainVenueSubUser(Models.VenueSubUser efSubUser)
-        {
-            // Use reflection to create the domain entity since constructors are private
-            var domainSubUser = Domain.Entities.VenueSubUser.Create(
-                efSubUser.VenueId,
-                efSubUser.Username,
-                efSubUser.PasswordHash,
-                efSubUser.Role,
-                efSubUser.Permissions,
-                efSubUser.CreatedBySubUserId ?? Guid.Empty
-            );
-
-            // Set additional properties using reflection
-            SetPrivateProperty(domainSubUser, nameof(Domain.Entities.VenueSubUser.Id), efSubUser.Id);
-            SetPrivateProperty(domainSubUser, nameof(Domain.Entities.VenueSubUser.IsActive), efSubUser.IsActive);
-            SetPrivateProperty(domainSubUser, nameof(Domain.Entities.VenueSubUser.IsFounderAdmin), efSubUser.IsFounderAdmin);
-            SetPrivateProperty(domainSubUser, nameof(Domain.Entities.VenueSubUser.LastLoginAt), efSubUser.LastLoginAt);
-            SetPrivateProperty(domainSubUser, nameof(Domain.Entities.VenueSubUser.FailedLoginAttempts), efSubUser.FailedLoginAttempts);
-            SetPrivateProperty(domainSubUser, nameof(Domain.Entities.VenueSubUser.LockoutEnd), efSubUser.LockoutEnd);
-            SetPrivateProperty(domainSubUser, nameof(Domain.Entities.VenueSubUser.PasswordChangedAt), efSubUser.PasswordChangedAt);
-            SetPrivateProperty(domainSubUser, nameof(Domain.Entities.VenueSubUser.MustChangePassword), efSubUser.MustChangePassword);
-            SetPrivateProperty(domainSubUser, "CreatedAt", efSubUser.CreatedAt);
-            SetPrivateProperty(domainSubUser, "UpdatedAt", efSubUser.UpdatedAt);
-
-            return domainSubUser;
-        }
-
-        private Domain.Entities.VenueSubUserSession MapToDomainVenueSubUserSession(Models.VenueSubUserSession efSession)
-        {
-            var domainSession = Domain.Entities.VenueSubUserSession.Create(
-                efSession.SubUserId,
-                efSession.RefreshToken,
-                efSession.RefreshTokenExpiry,
-                efSession.DeviceName,
-                efSession.DeviceType,
-                efSession.IpAddress,
-                efSession.UserAgent,
-                efSession.AccessTokenJti
-            );
-
-            // Set additional properties using reflection
-            SetPrivateProperty(domainSession, nameof(Domain.Entities.VenueSubUserSession.Id), efSession.Id);
-            SetPrivateProperty(domainSession, nameof(Domain.Entities.VenueSubUserSession.IsActive), efSession.IsActive);
-            SetPrivateProperty(domainSession, nameof(Domain.Entities.VenueSubUserSession.LastActivityAt), efSession.LastActivityAt);
-            SetPrivateProperty(domainSession, nameof(Domain.Entities.VenueSubUserSession.LogoutAt), efSession.LogoutAt);
-            SetPrivateProperty(domainSession, nameof(Domain.Entities.VenueSubUserSession.LogoutReason), efSession.LogoutReason);
-            SetPrivateProperty(domainSession, "CreatedAt", efSession.CreatedAt);
-            SetPrivateProperty(domainSession, "UpdatedAt", efSession.UpdatedAt);
-
-            return domainSession;
-        }
-
-        private static void SetPrivateProperty<T>(T obj, string propertyName, object? value)
-        {
-            var property = typeof(T).GetProperty(propertyName, 
-                System.Reflection.BindingFlags.NonPublic | 
-                System.Reflection.BindingFlags.Public | 
-                System.Reflection.BindingFlags.Instance);
+            // Convert to domain enums and return as dictionary
+            var result = new Dictionary<VenueType, int>();
             
-            if (property != null && property.CanWrite)
+            // Initialize all venue types with 0 count
+            foreach (VenueType venueType in Enum.GetValues<VenueType>())
             {
-                property.SetValue(obj, value);
+                result[venueType] = 0;
             }
+            
+            // Populate actual counts
+            foreach (var venueCount in venueCounts)
+            {
+                result[(VenueType)venueCount.VenueType] = venueCount.Count;
+            }
+
+            return result;
         }
+
+        public async Task<int> GetProfileCompletionRateAsync(CancellationToken cancellationToken = default)
+        {
+            var totalVenues = await _context.Venues
+                .Where(v => !v.IsDeleted && v.IsActive)
+                .CountAsync(cancellationToken);
+
+            if (totalVenues == 0)
+                return 0;
+
+            var completedVenues = await _context.Venues
+                .Where(v => !v.IsDeleted && v.IsActive && v.IsProfileComplete)
+                .CountAsync(cancellationToken);
+
+            return (int)Math.Round((double)completedVenues / totalVenues * 100, 0);
+        }
+
+        public async Task<IEnumerable<Domain.Entities.Venue>> GetMostPopularVenuesAsync(int count = 10, CancellationToken cancellationToken = default)
+        {
+            if (count <= 0) count = 10;
+            if (count > 100) count = 100; // Limit for performance
+
+            // For now, order by venues with complete profiles, then by created date (most recently added)
+            // TODO: When booking system is implemented, order by booking frequency
+            var efVenues = await _context.Venues
+                .Where(v => !v.IsDeleted && v.IsActive && v.IsProfileComplete)
+                .Include(v => v.District)
+                    .ThenInclude(d => d!.Governorate)
+                .Include(v => v.Images.Where(vi => vi.IsPrimary))
+                .Include(v => v.WorkingHours)
+                .OrderByDescending(v => v.IsProfileComplete) // Complete profiles first
+                .ThenByDescending(v => v.UpdatedAt) // Recently updated venues
+                .ThenBy(v => v.Name.Name) // Alphabetical as tie-breaker
+                .Take(count)
+                .ToListAsync(cancellationToken);
+
+            return efVenues;
+        }
+
+        public async Task<Dictionary<string, int>> GetVenuesByDistrictAsync(CancellationToken cancellationToken = default)
+        {
+            var venuesByDistrict = await _context.Venues
+                .Where(v => !v.IsDeleted && v.IsActive && v.District != null)
+                .GroupBy(v => v.District!.NameEn)
+                .Select(g => new { DistrictName = g.Key, Count = g.Count() })
+                .OrderByDescending(x => x.Count)
+                .ToListAsync(cancellationToken);
+
+            return venuesByDistrict.ToDictionary(x => x.DistrictName ?? "Unknown", x => x.Count);
+        }
+
+        public async Task<bool> CanCreateSubUserAsync(Guid venueId, CancellationToken cancellationToken = default)
+        {
+            // Check if venue exists and is active
+            var venue = await _context.Venues
+                .FirstOrDefaultAsync(v => v.Id == venueId && v.IsActive, cancellationToken);
+            
+            if (venue == null)
+                return false;
+
+            // Get current sub-user count for the venue
+            var currentCount = await _context.VenueSubUsers
+                .CountAsync(su => su.VenueId == venueId && su.IsActive, cancellationToken);
+
+            // Business rule: Venues can have up to 10 sub-users (configurable)
+            const int maxSubUsersPerVenue = 10;
+            
+            return currentCount < maxSubUsersPerVenue;
+        }
+
+        public async Task<int> GetSubUserCountAsync(Guid venueId, CancellationToken cancellationToken = default)
+        {
+            return await _context.VenueSubUsers
+                .CountAsync(su => su.VenueId == venueId && su.IsActive, cancellationToken);
+        }
+
+        public async Task<bool> HasActiveBookingsAsync(Guid venueId, CancellationToken cancellationToken = default)
+        {
+            // Check if there are any reservations for this venue
+            // Since the Reservation model is currently basic, we'll check if any reservations exist
+            // TODO: When booking system is fully implemented, add proper date/status filtering
+            var hasActiveBookings = await _context.Reservations
+                .Where(r => r.VenueId == venueId)
+                .AnyAsync(cancellationToken);
+
+            return hasActiveBookings;
+        }
+
+        // AutoMapper-based mapping is now handled by extension methods in Infrastructure.Mappings
     }
 }
