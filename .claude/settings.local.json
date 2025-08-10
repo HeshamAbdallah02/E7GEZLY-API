@@ -23,7 +23,8 @@
       "Bash(timeout:*)",
       "Bash(csc:*)",
       "Bash(del \"Models\\VenueEnums.cs\")",
-      "Bash(dir:*)"
+      "Bash(dir:*)",
+      "Bash(git checkout:*)"
     ],
     "deny": []
   }
