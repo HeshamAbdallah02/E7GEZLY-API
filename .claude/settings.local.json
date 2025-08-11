@@ -26,7 +26,8 @@
       "Bash(dir:*)",
       "Bash(git checkout:*)",
       "Bash(git tag:*)",
-      "Bash(del:*)"
+      "Bash(del:*)",
+      "Bash(echo)"
     ],
     "deny": []
   }
