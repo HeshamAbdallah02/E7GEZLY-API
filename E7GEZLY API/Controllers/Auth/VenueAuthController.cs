@@ -1,50 +1,33 @@
 ﻿// Controllers/Auth/VenueAuthController.cs
 using E7GEZLY_API.Attributes;
-using E7GEZLY_API.Data;
-using E7GEZLY_API.Domain.Enums;
 using E7GEZLY_API.DTOs.Auth;
-using E7GEZLY_API.DTOs.Location;
 using E7GEZLY_API.DTOs.Venue;
 using E7GEZLY_API.Extensions;
-using E7GEZLY_API.Models;
-using E7GEZLY_API.Services.Auth;
-using E7GEZLY_API.Services.Location;
-using E7GEZLY_API.Services.VenueManagement;
 using E7GEZLY_API.Application.Features.Authentication.Commands.Register;
 using E7GEZLY_API.Application.Features.Authentication.Commands.Login;
 using E7GEZLY_API.Application.Features.Authentication.Commands.CreateFirstAdmin;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.IdentityModel.Tokens;
-using System.IdentityModel.Tokens.Jwt;
-using System.Security.Claims;
-using System.Text;
 
 namespace E7GEZLY_API.Controllers.Auth
 {
     [ApiController]
     [Route("api/auth/venue")]
-    public class VenueAuthController : BaseAuthController
+    public class VenueAuthController : ControllerBase
     {
         private readonly IMediator _mediator;
+        private readonly ILogger<VenueAuthController> _logger;
+        private readonly IWebHostEnvironment _environment;
         
         public VenueAuthController(
-            UserManager<ApplicationUser> userManager,
-            SignInManager<ApplicationUser> signInManager,
-            ITokenService tokenService,
-            IVerificationService verificationService,
-            ILocationService locationService,
-            IGeocodingService geocodingService,
-            AppDbContext context,
+            IMediator mediator,
             ILogger<VenueAuthController> logger,
-            IWebHostEnvironment environment,
-            IMediator mediator)
-            : base(userManager, signInManager, tokenService, verificationService, locationService, geocodingService, context, logger, environment)
+            IWebHostEnvironment environment)
         {
             _mediator = mediator;
+            _logger = logger;
+            _environment = environment;
         }
 
         [HttpPost("register")]

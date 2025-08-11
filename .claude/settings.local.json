@@ -24,7 +24,9 @@
       "Bash(csc:*)",
       "Bash(del \"Models\\VenueEnums.cs\")",
       "Bash(dir:*)",
-      "Bash(git checkout:*)"
+      "Bash(git checkout:*)",
+      "Bash(git tag:*)",
+      "Bash(del:*)"
     ],
     "deny": []
   }
