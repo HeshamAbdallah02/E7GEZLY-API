@@ -1,230 +1,314 @@
-﻿// Controllers/Auth/AccountController.cs
-using E7GEZLY_API.Controllers.Auth;
-using E7GEZLY_API.Data;
+using E7GEZLY_API.Application.Features.Account.Commands.ChangePassword;
+using E7GEZLY_API.Application.Features.Account.Commands.DeactivateAccount;
+using E7GEZLY_API.Application.Features.Account.Commands.Logout;
+using E7GEZLY_API.Application.Features.Account.Commands.LogoutAllDevices;
+using E7GEZLY_API.Application.Features.Account.Commands.RevokeSession;
+using E7GEZLY_API.Application.Features.Account.Queries.CheckAuthStatus;
+using E7GEZLY_API.Application.Features.Account.Queries.GetActiveSessions;
+using E7GEZLY_API.Application.Features.Account.Queries.GetCurrentUser;
 using E7GEZLY_API.DTOs.Auth;
+using E7GEZLY_API.DTOs.Common;
 using E7GEZLY_API.Extensions;
-using E7GEZLY_API.Models;
-using E7GEZLY_API.Domain.Entities;
-using E7GEZLY_API.Services.Auth;
-using E7GEZLY_API.Services.Location;
+using MediatR;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 
 namespace E7GEZLY_API.Controllers.Auth
 {
+    /// <summary>
+    /// Account Management Controller using Clean Architecture with CQRS/MediatR pattern
+    /// Handles user account operations through Application layer
+    /// </summary>
     [ApiController]
     [Route("api/auth/account")]
     [Authorize]
-    public class AccountController : BaseAuthController
+    public class AccountController : ControllerBase
     {
-        private readonly IProfileService _profileService;
-        public AccountController(
-            UserManager<ApplicationUser> userManager,
-            SignInManager<ApplicationUser> signInManager,
-            ITokenService tokenService,
-            IVerificationService verificationService,
-            ILocationService locationService,
-            IGeocodingService geocodingService,
-            AppDbContext context,
-            ILogger<AccountController> logger,
-            IWebHostEnvironment environment,
-            IProfileService profileService)
-            : base(userManager, signInManager, tokenService, verificationService, locationService, geocodingService, context, logger, environment)
+        private readonly IMediator _mediator;
+        private readonly ILogger<AccountController> _logger;
+
+        public AccountController(IMediator mediator, ILogger<AccountController> logger)
         {
-            _profileService = profileService;
+            _mediator = mediator;
+            _logger = logger;
         }
 
+        /// <summary>
+        /// Get current authenticated user profile
+        /// </summary>
         [HttpGet("me")]
-        public async Task<IActionResult> GetCurrentUser()
+        public async Task<ActionResult<ApiResponse<object>>> GetCurrentUser()
         {
-            var userId = _userManager.GetUserId(User);
-            var user = await _userManager.Users
-                .Include(u => u.CustomerProfile)
-                .Include(u => u.Venue)
-                .FirstOrDefaultAsync(u => u.Id == userId);
-
-            if (user == null)
-                return NotFound(new { message = "User not found" });
-
-            // Check if it's a customer
-            if (user.CustomerProfile != null)
+            try
             {
-                var profile = await _context.CustomerProfiles
-                    .Include(c => c.District)
-                    .ThenInclude(d => d!.Governorate)
-                    .FirstOrDefaultAsync(c => c.UserId == userId);
-
-                return Ok(new
+                var userId = HttpContext.GetUserId();
+                if (string.IsNullOrEmpty(userId))
                 {
-                    userType = "customer",
-                    user = new
-                    {
-                        id = user.Id,
-                        email = user.Email,
-                        phoneNumber = user.PhoneNumber,
-                        isPhoneVerified = user.IsPhoneNumberVerified,
-                        isEmailVerified = user.IsEmailVerified
-                    },
-                    profile = new
-                    {
-                        id = profile!.Id,
-                        firstName = profile.Name.FirstName,
-                        lastName = profile.Name.LastName,
-                        dateOfBirth = profile.DateOfBirth,
-                        address = profile.Address.FullAddress,
-                        district = profile.District?.NameEn,
-                        governorate = profile.District?.Governorate?.NameEn
-                    }
-                });
-            }
+                    return Unauthorized(ApiResponse<object>.CreateError("User not authenticated"));
+                }
 
-            // It's a venue
-            if (user.VenueId != null)
+                var query = new GetCurrentUserQuery { UserId = userId };
+                var result = await _mediator.Send(query);
+
+                if (result.IsSuccess)
+                {
+                    return Ok(ApiResponse<object>.CreateSuccess(result.Data!));
+                }
+
+                return NotFound(ApiResponse<object>.CreateError(result.ErrorMessage!));
+            }
+            catch (Exception ex)
             {
-                var venue = await _context.Venues
-                    .Include(v => v.District)
-                    .ThenInclude(d => d!.Governorate)
-                    .FirstOrDefaultAsync(v => v.Id == user.VenueId);
-
-                return Ok(new
-                {
-                    userType = "venue",
-                    user = new
-                    {
-                        id = user.Id,
-                        email = user.Email,
-                        phoneNumber = user.PhoneNumber,
-                        isPhoneVerified = user.IsPhoneNumberVerified,
-                        isEmailVerified = user.IsEmailVerified
-                    },
-                    venue = new
-                    {
-                        id = venue!.Id,
-                        name = venue.Name.Name,
-                        type = venue.VenueType.ToString(),
-                        isProfileComplete = venue.IsProfileComplete,
-                        location = venue.IsProfileComplete ? new
-                        {
-                            latitude = venue.Address.Coordinates?.Latitude,
-                            longitude = venue.Address.Coordinates?.Longitude,
-                            address = venue.Address.FullAddress,
-                            district = venue.District?.NameEn,
-                            governorate = venue.District?.Governorate?.NameEn
-                        } : null
-                    }
-                });
+                _logger.LogError(ex, "Error getting current user");
+                return StatusCode(500, ApiResponse<object>.CreateError("An error occurred while retrieving user profile"));
             }
-
-            return BadRequest(new { message = "Invalid user profile" });
         }
 
+        /// <summary>
+        /// Get active sessions for the current user
+        /// </summary>
         [HttpGet("sessions")]
-        public async Task<IActionResult> GetActiveSessions()
+        public async Task<ActionResult<ApiResponse<SessionsResponseDto>>> GetActiveSessions()
         {
-            var userId = HttpContext.GetUserId();
-            if (userId == null)
-                return Unauthorized(new { message = "User not authenticated" });
+            try
+            {
+                var userId = HttpContext.GetUserId();
+                if (string.IsNullOrEmpty(userId))
+                {
+                    return Unauthorized(ApiResponse<SessionsResponseDto>.CreateError("User not authenticated"));
+                }
 
-            var currentToken = HttpContext.GetCurrentRefreshToken();
-            var sessions = await _tokenService.GetActiveSessionsAsync(userId, currentToken);
+                var currentToken = HttpContext.GetCurrentRefreshToken();
+                var query = new GetActiveSessionsQuery 
+                { 
+                    UserId = userId, 
+                    CurrentRefreshToken = currentToken 
+                };
+                var result = await _mediator.Send(query);
 
-            return Ok(new SessionsResponseDto(sessions, sessions.Count()));
+                if (result.IsSuccess)
+                {
+                    return Ok(ApiResponse<SessionsResponseDto>.CreateSuccess(result.Data!));
+                }
+
+                return BadRequest(ApiResponse<SessionsResponseDto>.CreateError(result.ErrorMessage!));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting active sessions");
+                return StatusCode(500, ApiResponse<SessionsResponseDto>.CreateError("An error occurred while retrieving sessions"));
+            }
         }
 
+        /// <summary>
+        /// Revoke a specific session
+        /// </summary>
         [HttpDelete("sessions/{sessionId}")]
-        public async Task<IActionResult> RevokeSession(Guid sessionId)
+        public async Task<ActionResult<ApiResponse<object>>> RevokeSession(Guid sessionId)
         {
-            var userId = HttpContext.GetUserId();
-            if (userId == null)
-                return Unauthorized(new { message = "User not authenticated" });
+            try
+            {
+                var userId = HttpContext.GetUserId();
+                if (string.IsNullOrEmpty(userId))
+                {
+                    return Unauthorized(ApiResponse<object>.CreateError("User not authenticated"));
+                }
 
-            var success = await _tokenService.RevokeSessionAsync(userId, sessionId);
-            if (!success)
-                return NotFound(new { message = "Session not found" });
+                var command = new RevokeSessionCommand 
+                { 
+                    UserId = userId, 
+                    SessionId = sessionId 
+                };
+                var result = await _mediator.Send(command);
 
-            return Ok(new { message = "Session revoked successfully" });
+                if (result.IsSuccess)
+                {
+                    return Ok(ApiResponse<object>.CreateSuccess(result.Data!));
+                }
+
+                return NotFound(ApiResponse<object>.CreateError(result.ErrorMessage!));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error revoking session {SessionId}", sessionId);
+                return StatusCode(500, ApiResponse<object>.CreateError("An error occurred while revoking session"));
+            }
         }
 
+        /// <summary>
+        /// Logout from current session
+        /// </summary>
         [HttpPost("logout")]
-        public async Task<IActionResult> Logout()
+        public async Task<ActionResult<ApiResponse<object>>> Logout()
         {
-            var refreshToken = HttpContext.GetCurrentRefreshToken();
-            if (string.IsNullOrEmpty(refreshToken))
-                return BadRequest(new { message = "No active session found" });
+            try
+            {
+                var refreshToken = HttpContext.GetCurrentRefreshToken();
+                if (string.IsNullOrEmpty(refreshToken))
+                {
+                    return BadRequest(ApiResponse<object>.CreateError("No active session found"));
+                }
 
-            var success = await _tokenService.RevokeTokenAsync(refreshToken);
-            if (!success)
-                return BadRequest(new { message = "Failed to logout" });
+                var command = new LogoutCommand { RefreshToken = refreshToken };
+                var result = await _mediator.Send(command);
 
-            return Ok(new { message = "Logged out successfully" });
+                if (result.IsSuccess)
+                {
+                    return Ok(ApiResponse<object>.CreateSuccess(result.Data!));
+                }
+
+                return BadRequest(ApiResponse<object>.CreateError(result.ErrorMessage!));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error during logout");
+                return StatusCode(500, ApiResponse<object>.CreateError("An error occurred during logout"));
+            }
         }
 
+        /// <summary>
+        /// Logout from all devices
+        /// </summary>
         [HttpPost("logout-all-devices")]
-        public async Task<IActionResult> LogoutAllDevices()
+        public async Task<ActionResult<ApiResponse<object>>> LogoutAllDevices()
         {
-            var userId = HttpContext.GetUserId();
-            if (userId == null)
-                return Unauthorized(new { message = "User not authenticated" });
+            try
+            {
+                var userId = HttpContext.GetUserId();
+                if (string.IsNullOrEmpty(userId))
+                {
+                    return Unauthorized(ApiResponse<object>.CreateError("User not authenticated"));
+                }
 
-            var success = await _tokenService.RevokeAllUserTokensAsync(userId);
-            if (!success)
-                return BadRequest(new { message = "No active sessions found" });
+                var command = new LogoutAllDevicesCommand { UserId = userId };
+                var result = await _mediator.Send(command);
 
-            return Ok(new { message = "Logged out from all devices successfully" });
+                if (result.IsSuccess)
+                {
+                    return Ok(ApiResponse<object>.CreateSuccess(result.Data!));
+                }
+
+                return BadRequest(ApiResponse<object>.CreateError(result.ErrorMessage!));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error during logout all devices");
+                return StatusCode(500, ApiResponse<object>.CreateError("An error occurred during logout"));
+            }
         }
 
+        /// <summary>
+        /// Change user password
+        /// </summary>
         [HttpPost("change-password")]
-        public async Task<IActionResult> ChangePassword(ChangePasswordDto dto)
+        public async Task<ActionResult<ApiResponse<object>>> ChangePassword(ChangePasswordDto dto)
         {
-            var userId = HttpContext.GetUserId();
-            if (userId == null)
-                return Unauthorized(new { message = "User not authenticated" });
-
-            var user = await _userManager.FindByIdAsync(userId);
-            if (user == null)
-                return NotFound(new { message = "User not found" });
-
-            var result = await _userManager.ChangePasswordAsync(user, dto.CurrentPassword, dto.NewPassword);
-            if (!result.Succeeded)
+            try
             {
-                return BadRequest(new { errors = result.Errors });
-            }
+                if (!ModelState.IsValid)
+                {
+                    return BadRequest(ApiResponse<object>.CreateError("Validation failed"));
+                }
 
-            // Optionally logout all devices if requested
-            if (dto.LogoutAllDevices)
+                var userId = HttpContext.GetUserId();
+                if (string.IsNullOrEmpty(userId))
+                {
+                    return Unauthorized(ApiResponse<object>.CreateError("User not authenticated"));
+                }
+
+                var command = new ChangePasswordCommand
+                {
+                    UserId = userId,
+                    CurrentPassword = dto.CurrentPassword,
+                    NewPassword = dto.NewPassword,
+                    LogoutAllDevices = dto.LogoutAllDevices
+                };
+                var result = await _mediator.Send(command);
+
+                if (result.IsSuccess)
+                {
+                    return Ok(ApiResponse<object>.CreateSuccess(result.Data!));
+                }
+
+                return BadRequest(ApiResponse<object>.CreateError(result.ErrorMessage!, result.Errors));
+            }
+            catch (Exception ex)
             {
-                await _tokenService.RevokeAllUserTokensAsync(userId);
+                _logger.LogError(ex, "Error changing password");
+                return StatusCode(500, ApiResponse<object>.CreateError("An error occurred while changing password"));
             }
-
-            _logger.LogInformation($"Password changed for user: {user.Email}");
-            return Ok(new { message = "Password changed successfully" });
         }
 
+        /// <summary>
+        /// Deactivate user account
+        /// </summary>
         [HttpPost("deactivate")]
-        public async Task<IActionResult> DeactivateAccount(DeactivateAccountDto dto)
+        public async Task<ActionResult<ApiResponse<object>>> DeactivateAccount(DeactivateAccountDto dto)
         {
-            var userId = HttpContext.GetUserId();
-            if (userId == null)
-                return Unauthorized(new { message = "User not authenticated" });
+            try
+            {
+                if (!ModelState.IsValid)
+                {
+                    return BadRequest(ApiResponse<object>.CreateError("Validation failed"));
+                }
 
-            // Use ProfileService which now handles everything including session revocation
-            var success = await _profileService.DeactivateAccountAsync(userId, dto.Password, dto.Reason);
-            if (!success)
-                return BadRequest(new { message = "Failed to deactivate account. Please check your password." });
+                var userId = HttpContext.GetUserId();
+                if (string.IsNullOrEmpty(userId))
+                {
+                    return Unauthorized(ApiResponse<object>.CreateError("User not authenticated"));
+                }
 
-            return Ok(new { message = "Account deactivated successfully" });
+                var command = new DeactivateAccountCommand
+                {
+                    UserId = userId,
+                    Password = dto.Password,
+                    Reason = dto.Reason
+                };
+                var result = await _mediator.Send(command);
+
+                if (result.IsSuccess)
+                {
+                    return Ok(ApiResponse<object>.CreateSuccess(result.Data!));
+                }
+
+                return BadRequest(ApiResponse<object>.CreateError(result.ErrorMessage!));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error deactivating account");
+                return StatusCode(500, ApiResponse<object>.CreateError("An error occurred while deactivating account"));
+            }
         }
 
+        /// <summary>
+        /// Check authentication status
+        /// </summary>
         [HttpGet("check-auth")]
-        public IActionResult CheckAuth()
+        public async Task<ActionResult<ApiResponse<object>>> CheckAuth()
         {
-            var userId = HttpContext.GetUserId();
-            if (string.IsNullOrEmpty(userId))
-                return Unauthorized(new { message = "Not authenticated" });
+            try
+            {
+                var userId = HttpContext.GetUserId();
+                if (string.IsNullOrEmpty(userId))
+                {
+                    return Unauthorized(ApiResponse<object>.CreateError("Not authenticated"));
+                }
 
-            return Ok(new { authenticated = true, userId });
+                var query = new CheckAuthStatusQuery { UserId = userId };
+                var result = await _mediator.Send(query);
+
+                if (result.IsSuccess)
+                {
+                    return Ok(ApiResponse<object>.CreateSuccess(result.Data!));
+                }
+
+                return Unauthorized(ApiResponse<object>.CreateError(result.ErrorMessage!));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error checking auth status");
+                return StatusCode(500, ApiResponse<object>.CreateError("An error occurred while checking authentication"));
+            }
         }
     }
 }
