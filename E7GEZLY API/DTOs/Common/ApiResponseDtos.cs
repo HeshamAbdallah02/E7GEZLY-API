@@ -4,7 +4,8 @@ namespace E7GEZLY_API.DTOs.Common
     public record ApiResponse<T>(
         bool Success,
         string Message,
-        T? Data = default
+        T? Data = default,
+        IEnumerable<string>? Errors = null
     )
     {
         public static ApiResponse<T> CreateSuccess(T data, string message = "Success")
@@ -15,6 +16,11 @@ namespace E7GEZLY_API.DTOs.Common
         public static ApiResponse<T> CreateError(string message)
         {
             return new ApiResponse<T>(false, message, default);
+        }
+
+        public static ApiResponse<T> CreateError(string message, IEnumerable<string> errors)
+        {
+            return new ApiResponse<T>(false, message, default, errors);
         }
     };
 

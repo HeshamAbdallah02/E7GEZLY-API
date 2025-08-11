@@ -1,0 +1,210 @@
+### E7GEZLY API - Account Management Test Suite
+### Clean Architecture AccountController with MediatR Pattern
+### Testing all 8 endpoints with Customer and Venue scenarios
+
+@baseUrl = https://localhost:7014
+@contentType = application/json
+
+### Variables (Update these with actual tokens after login)
+@customerToken = YOUR_CUSTOMER_JWT_TOKEN_HERE
+@venueToken = YOUR_VENUE_JWT_TOKEN_HERE
+@sessionIdToRevoke = YOUR_SESSION_ID_HERE
+
+### ================================
+### 1. GET /me - Get Current User (Customer)
+### ================================
+
+GET {{baseUrl}}/api/auth/account/me
+Authorization: Bearer {{customerToken}}
+Content-Type: {{contentType}}
+
+### ================================
+### 2. GET /me - Get Current User (Venue)
+### ================================
+
+GET {{baseUrl}}/api/auth/account/me
+Authorization: Bearer {{venueToken}}
+Content-Type: {{contentType}}
+
+### ================================
+### 3. GET /sessions - Get Active Sessions (Customer)
+### ================================
+
+GET {{baseUrl}}/api/auth/account/sessions
+Authorization: Bearer {{customerToken}}
+Content-Type: {{contentType}}
+
+### ================================
+### 4. GET /sessions - Get Active Sessions (Venue)
+### ================================
+
+GET {{baseUrl}}/api/auth/account/sessions
+Authorization: Bearer {{venueToken}}
+Content-Type: {{contentType}}
+
+### ================================
+### 5. DELETE /sessions/{id} - Revoke Specific Session
+### ================================
+
+DELETE {{baseUrl}}/api/auth/account/sessions/{{sessionIdToRevoke}}
+Authorization: Bearer {{customerToken}}
+Content-Type: {{contentType}}
+
+### ================================
+### 6. POST /logout - Logout Current Session
+### ================================
+
+POST {{baseUrl}}/api/auth/account/logout
+Authorization: Bearer {{customerToken}}
+Content-Type: {{contentType}}
+
+### ================================
+### 7. POST /logout-all-devices - Logout All Devices
+### ================================
+
+POST {{baseUrl}}/api/auth/account/logout-all-devices
+Authorization: Bearer {{venueToken}}
+Content-Type: {{contentType}}
+
+### ================================
+### 8. POST /change-password - Change Password (No Logout)
+### ================================
+
+POST {{baseUrl}}/api/auth/account/change-password
+Authorization: Bearer {{customerToken}}
+Content-Type: {{contentType}}
+
+{
+  "currentPassword": "OldPassword123!",
+  "newPassword": "NewPassword123!",
+  "logoutAllDevices": false
+}
+
+### ================================
+### 9. POST /change-password - Change Password (With All Devices Logout)
+### ================================
+
+POST {{baseUrl}}/api/auth/account/change-password
+Authorization: Bearer {{venueToken}}
+Content-Type: {{contentType}}
+
+{
+  "currentPassword": "OldPassword123!",
+  "newPassword": "NewPassword456!",
+  "logoutAllDevices": true
+}
+
+### ================================
+### 10. POST /deactivate - Deactivate Account (Customer)
+### ================================
+
+POST {{baseUrl}}/api/auth/account/deactivate
+Authorization: Bearer {{customerToken}}
+Content-Type: {{contentType}}
+
+{
+  "password": "UserPassword123!",
+  "reason": "No longer needed"
+}
+
+### ================================
+### 11. POST /deactivate - Deactivate Account (Venue)
+### ================================
+
+POST {{baseUrl}}/api/auth/account/deactivate
+Authorization: Bearer {{venueToken}}
+Content-Type: {{contentType}}
+
+{
+  "password": "VenuePassword123!",
+  "reason": "Business closure"
+}
+
+### ================================
+### 12. GET /check-auth - Check Authentication Status
+### ================================
+
+GET {{baseUrl}}/api/auth/account/check-auth
+Authorization: Bearer {{customerToken}}
+Content-Type: {{contentType}}
+
+### ================================
+### 13. GET /check-auth - Check Authentication Status (Venue)
+### ================================
+
+GET {{baseUrl}}/api/auth/account/check-auth
+Authorization: Bearer {{venueToken}}
+Content-Type: {{contentType}}
+
+### ================================
+### ERROR SCENARIOS TESTING
+### ================================
+
+### 14. GET /me - Unauthorized (No Token)
+GET {{baseUrl}}/api/auth/account/me
+Content-Type: {{contentType}}
+
+### 15. POST /change-password - Invalid Current Password
+POST {{baseUrl}}/api/auth/account/change-password
+Authorization: Bearer {{customerToken}}
+Content-Type: {{contentType}}
+
+{
+  "currentPassword": "WrongPassword123!",
+  "newPassword": "NewPassword123!",
+  "logoutAllDevices": false
+}
+
+### 16. POST /change-password - Weak New Password
+POST {{baseUrl}}/api/auth/account/change-password
+Authorization: Bearer {{customerToken}}
+Content-Type: {{contentType}}
+
+{
+  "currentPassword": "CurrentPassword123!",
+  "newPassword": "weak",
+  "logoutAllDevices": false
+}
+
+### 17. POST /deactivate - Wrong Password
+POST {{baseUrl}}/api/auth/account/deactivate
+Authorization: Bearer {{customerToken}}
+Content-Type: {{contentType}}
+
+{
+  "password": "WrongPassword123!",
+  "reason": "Test deactivation"
+}
+
+### 18. DELETE /sessions/{id} - Invalid Session ID
+DELETE {{baseUrl}}/api/auth/account/sessions/00000000-0000-0000-0000-000000000000
+Authorization: Bearer {{customerToken}}
+Content-Type: {{contentType}}
+
+### ================================
+### RESPONSE EXPECTATIONS
+### ================================
+
+### Expected Successful Responses:
+### - GET /me: Returns user profile with userType (customer/venue) and profile data
+### - GET /sessions: Returns active sessions with device info and current session marked
+### - DELETE /sessions/{id}: Returns success message
+### - POST /logout: Returns success message and invalidates current session
+### - POST /logout-all-devices: Returns success message and invalidates all sessions
+### - POST /change-password: Returns success message, optionally logs out all devices
+### - POST /deactivate: Returns success message and deactivates account
+### - GET /check-auth: Returns authentication status and basic user info
+
+### Expected Error Responses:
+### - 401 Unauthorized: For requests without valid tokens
+### - 400 Bad Request: For validation failures
+### - 404 Not Found: For non-existent sessions/users
+### - 500 Internal Server Error: For unexpected errors
+
+### All responses follow ApiResponse<T> format:
+### {
+###   "success": true/false,
+###   "message": "Success message or error description",
+###   "data": { ... response data ... },
+###   "errors": ["list of validation errors"] (optional)
+### }

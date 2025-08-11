@@ -38,8 +38,8 @@ namespace E7GEZLY_API.Application.Features.Account.Commands.ChangePassword
                 var result = await _userManager.ChangePasswordAsync(user, request.CurrentPassword, request.NewPassword);
                 if (!result.Succeeded)
                 {
-                    var errors = result.Errors.Select(e => e.Description).ToList();
-                    return ApplicationResult<object>.Failure("Password change failed", errors);
+                    var errors = result.Errors.Select(e => e.Description);
+                    return ApplicationResult<object>.Failure(errors);
                 }
 
                 // Optionally logout all devices if requested
